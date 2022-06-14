@@ -1,15 +1,7 @@
-// Copyright 2021 Nadia Davidson 
-// This program is distributed under the GNU
-// General Public License. We also ask that you cite this software in
-// publications where you made use of it for any part of the data
-// analysis.
-
-/** 
- ** 
- **
- ** Author: Nadia Davidson
- ** Modified: 
- **/ 
+// Copyright 2022 Nadia Davidson 
+// This program is distributed under the MIT License.
+// We also ask that you cite this software in publications
+// where you made use of it for any part of the data analysis.
 
 #include <iostream>
 #include <fstream>
@@ -21,10 +13,11 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <vector>
+#include <algorithm>
 
 #include "edlib.h"
 
-#include <gperftools/profiler.h>
+//#include <gperftools/profiler.h>
 
 using namespace std;
 
@@ -34,22 +27,20 @@ void print_usage(){
   cerr << "usage: flexiplex [options] reads_input"  << endl;
   cerr << "  reads_input: a .fastq or .fasta file" << endl;
   cerr << "  options: " << endl;
-  cerr << "     -w white_list Text file of expected barcdes (one row per barcode)" << endl; 
-  cerr << "     -p primer  Primer sequence to search for (default: CTACACGACGCTCTTCCGATCT)" << endl;
-  cerr << "     -T polyT   polyT sequence to search for (default: TTTTTTTTT)" << endl;
+  cerr << "     -k known_list  Text file of expected barcodes (one row per barcode)." << endl; 
+  cerr << "                    if not provided, flexiplex will accept any sequence as a barcodes. " << endl; 
+  cerr << "     -p primer  Left flank sequence to search for (default: CTACACGACGCTCTTCCGATCT)" << endl;
+  cerr << "     -T polyT   Right flank sequence to search for (default: TTTTTTTTT)" << endl;
   cerr << "     -b N   Barcode length (default: 16)" << endl;
   cerr << "     -u N   UMI length (default: 12)" << endl;
-  cerr << "     -d N   Fetch barcode list from reads_input, assuming approx. this many cells (default 0 - off)" << endl;
   cerr << "     -e N   Maximum edit distance to barcode (default 2)" << endl;
   cerr << "     -f N   Maximum edit distance to primer+ployT (default 10)" << endl;
-  //  cerr << "     -t stat_output  Name of file to output table of barcode-read assignments" << endl;
-  //  cerr << "     -o read_output  Name of the file to output adjusted reads" << endl;
-  cerr << "     -s true/false   Whether to split reads up when multiple barcodes seen" << endl;
   cerr << "     -r true/false   Whether to remove barcode sequence from reads" << endl;
   cerr << endl;
 }
 
 
+// compliment nucleotides - used to reverse compliment string
 char compliment(char& c){
   switch(c){
   case 'A' : return 'T';
@@ -66,6 +57,7 @@ void reverse_compliment(string & seq){
    transform(seq.begin(),seq.end(),seq.begin(),compliment);
 }
 
+//Holds the search string patterns
 struct SearchSeq {
   string primer;
   string polyA;
@@ -73,6 +65,7 @@ struct SearchSeq {
   string temp_barcode;
 } ;
 
+//Holds the found barcode and assocaited information 
 struct Barcode {
   string barcode;
   string umi;
@@ -84,81 +77,58 @@ struct Barcode {
 } ;
 
 
-//search for substring where barcode and UMI should be located using edlib
+//Given a string 'seq' search for substring with primer and polyT sequence followed by
+//a targeted search in the region for barcode
+//Seaquence seearch is performed using edlib
 Barcode get_barcode(string & seq,
 		    unordered_set<string> *known_barcodes,
 		    int flank_max_editd,
 		    int barcode_max_editd,
 		    SearchSeq & ss){
   
-  //initialise struct variables:
+  //initialise struct variables for return:
   Barcode barcode;
   barcode.editd=100; barcode.next_editd=100; barcode.flank_editd=100;
 
+  //initialise edlib configuration
   EdlibEqualityPair additionalEqualities[5] = {{'?','A'},{'?','C'},{'?','G'},{'?','T'},{'?','N'}};
   EdlibAlignConfig edlibConf = {flank_max_editd, EDLIB_MODE_HW, EDLIB_TASK_PATH, additionalEqualities, 5};
   string search_string; 
   EdlibAlignResult result; 
 
-  // search for primer and ployT
+  //search for primer and ployT (barcode and umi as wildcards)
   search_string=ss.primer+ss.temp_barcode+ss.umi_seq+ss.polyA;
   result = edlibAlign(search_string.c_str(), search_string.length(), seq.c_str(), seq.length(), edlibConf);
   if(result.status != EDLIB_STATUS_OK | result.numLocations==0 ){
     edlibFreeAlignResult(result);
-    return(barcode); // no match found
-  }
+    return(barcode); // no match found - return
+  } //fill in info about found primer and polyT location
   barcode.flank_editd=result.editDistance;
   barcode.flank_start=result.startLocations[0];
   barcode.flank_end=result.endLocations[0];
   
-  if(known_barcodes==NULL){ //if not checking against known list return..
+  if(known_barcodes->size()==0){ //if not checking against known list return sequence after the primer
     barcode.barcode=seq.substr(result.startLocations[0]+ss.primer.size(),ss.temp_barcode.length());
+    barcode.editd=0;
     edlibFreeAlignResult(result);
     return(barcode);
   }
 
-  //result = edlibAlign(primer.c_str(),primer.length(),seq.c_str(), seq.length(), edlibConf);
-  int OFFSET=5;//barcode_max_editd/2;
+  //otherwise, check again a list of known barcodes
+  int OFFSET=5; //include this many bases extra to the left and right incase of indels errors
   int BC_START=result.startLocations[0]+ss.primer.length()-OFFSET;
-  //result.endLocations[0]+1;//result.startLocations[0];//+primer.length()-OFFSET;
   string barcode_seq=seq.substr(BC_START,ss.temp_barcode.length()+2*OFFSET);
-  
-  //other search over the list of known barcodes.
-  /**unordered_set<string>::iterator known_barcodes_itr=known_barcodes->begin();
-  string barcodes_concat="";
-  for(; known_barcodes_itr!=known_barcodes->end(); known_barcodes_itr++)
-    barcodes_concat+=primer+(*known_barcodes_itr)+string(temp_barcode.length(),'X');
-  edlibConf = edlibNewAlignConfig(flank_max_editd+barcode_max_editd+2*OFFSET,EDLIB_MODE_HW,EDLIB_TASK_LOC,NULL,0);
-  result = edlibAlign(barcode_seq.c_str(), barcode_seq.length(),barcodes_concat.c_str(),barcodes_concat.length(),edlibConf);
-  if(result.status == EDLIB_STATUS_OK && result.numLocations!=0){
-    //    barcode.editd=result.editDistance-OFFSET;
-    int idx=result.endLocations[0]/(temp_barcode.length()+temp_barcode.length()+primer.length());
-    known_barcodes_itr=known_barcodes->begin();
-    advance(known_barcodes_itr,idx);
-    barcode.barcode=*(known_barcodes_itr);
-       cout << barcode_seq << " " <<  barcode.barcode << " " << result.endLocations[0] << " " << result.startLocations[0]
-       << " " << result.editDistance << " " << "!"<< endl;
-    //realign to get edit distance
-    result=edlibAlign(barcode.barcode.c_str(),barcode.barcode.length(),barcode_seq.c_str(), barcode_seq.length(),edlibConf);
-    if(result.status == EDLIB_STATUS_OK && result.numLocations!=0){
-      barcode.editd=result.editDistance; //add check..
-       cout << barcode_seq << " " <<  barcode.barcode << " " << result.endLocations[0] << " " << result.startLocations[0]
-       << " " << barcode.editd << " " << "!"<< endl;
-    } else {
-      cout << "No alignment: "<< barcode_seq << endl;
-    }
-    }**/
-    
+  //reconfigure edlib for the targetted search
   edlibConf = edlibNewAlignConfig(barcode_max_editd,EDLIB_MODE_HW,EDLIB_TASK_LOC,NULL,0);
   unordered_set<string>::iterator known_barcodes_itr=known_barcodes->begin();
   for(; known_barcodes_itr!=known_barcodes->end(); known_barcodes_itr++){
     search_string=(*known_barcodes_itr);
     result = edlibAlign(search_string.c_str(), search_string.length(), barcode_seq.c_str(), barcode_seq.length(),edlibConf);
-    if(result.status == EDLIB_STATUS_OK && result.numLocations!=0 && (result.editDistance <= barcode.editd)) {
-      barcode.next_editd=barcode.editd;
+    if(result.status == EDLIB_STATUS_OK && result.numLocations!=0 && (result.editDistance < barcode.editd)) {
+      barcode.next_editd=barcode.editd; //if this barcode has the lowest edit distance update best match..
       barcode.editd=result.editDistance;
       barcode.barcode=*known_barcodes_itr;
-      barcode.umi=seq.substr(BC_START+result.endLocations[0]+1,ss.umi_seq.length());
+      barcode.umi=seq.substr(BC_START+result.endLocations[0]+1,ss.umi_seq.length()); //get the umi
       if(barcode.editd==0){ //perfect match, stop looking and return
 	edlibFreeAlignResult(result);
 	return(barcode); 
@@ -167,15 +137,17 @@ Barcode get_barcode(string & seq,
   }
   
   edlibFreeAlignResult(result);
-  return(barcode);
+  return(barcode); //return the best matched barcode and associated information
 }
 
+//search a read for one or more barcodes (parent function that calls get_barcode)
 vector<Barcode> big_barcode_search(string & sequence, unordered_set<string> & known_barcodes,
 				   int max_flank_editd, int max_editd, SearchSeq & ss){
-  vector<Barcode> return_vec;
-  
+  vector<Barcode> return_vec; //vector of all the barcodes found
+
+  //search for barcode
   Barcode result=get_barcode(sequence,&known_barcodes,max_flank_editd,max_editd,ss);
-  if(result.editd<=max_editd)
+  if(result.editd<=max_editd) //add to return vector if edit distance small enough
     return_vec.push_back(result);
   
   //if a result was found, mask out the flanking sequence and search again in case there are more.
@@ -184,7 +156,7 @@ vector<Barcode> big_barcode_search(string & sequence, unordered_set<string> & kn
     for(int i=0; i<return_vec.size(); i++){
       int flank_length=return_vec.at(i).flank_end-return_vec.at(i).flank_start;
       masked_sequence.replace(return_vec.at(i).flank_start,flank_length,string(flank_length,'X'));
-    }
+    } //recursively call this function until no more barcodes are found
     vector<Barcode> masked_res;
     masked_res=big_barcode_search(masked_sequence,known_barcodes,max_flank_editd,max_editd,ss);
     return_vec.insert(return_vec.end(),masked_res.begin(),masked_res.end()); //add to result
@@ -193,7 +165,7 @@ vector<Barcode> big_barcode_search(string & sequence, unordered_set<string> & kn
   return(return_vec);
 }
 
-
+// utility function to check true/false input options
 bool get_bool_opt_arg(string value){
   transform(value.begin(), value.end(), value.begin(), ::tolower);
   if( value.compare("true")==0 | value.compare("t")==0 | value.compare("1")==0){
@@ -207,7 +179,7 @@ bool get_bool_opt_arg(string value){
   } 
 }
 
-
+// print information about barcodes
 void print_stats(string read_id, vector<Barcode> & vec_bc, ostream & out_stream){
   for(int b=0; b<vec_bc.size() ; b++){
     out_stream << read_id << "\t"
@@ -254,7 +226,7 @@ void print_read(string read_id, string read, string qual, vector<Barcode> & vec_
 }
 
 
-// MAIN is here
+// MAIN is here!!
 int main(int argc, char **argv){
 
   //Variables to store user options
@@ -262,17 +234,16 @@ int main(int argc, char **argv){
   int expected_cells=0; //(d)
   int edit_distance=2; //(e)
   int flank_edit_distance=10; //(f)
-  string out_read_filename=""; //(o)
+  string out_bc_filename=""; //(o)
   string out_stat_filename=""; //(t)
   bool split_file_by_barcode=false; //(s)
   bool remove_barcodes=true; //(r)
-  string pattern=""; //(p)
-
+  
   SearchSeq search_patterns;
   search_patterns.primer = "CTACACGACGCTCTTCCGATCT"; //(p)
-  search_patterns.polyA = "TTTTTTTTT"; //(T)
-  search_patterns.umi_seq = "????????????"; //(length u)
-  search_patterns.temp_barcode = "????????????????"; //(length b)
+  search_patterns.polyA = string(9,'T'); //(T)
+  search_patterns.umi_seq = string(12,'?'); //(length u)
+  search_patterns.temp_barcode = string(16,'?'); //(length b)
 
   //Set of known barcodes 
   unordered_set<string> known_barcodes;
@@ -283,12 +254,12 @@ int main(int argc, char **argv){
   ifstream file;
   string line;
 
-  while((c =  getopt(argc, argv, "w:e:d:s:o:t:r:f:p:T:u:b:")) != EOF){
+  while((c =  getopt(argc, argv, "k:e:d:s:o:t:r:f:p:T:u:b:")) != EOF){
     switch(c){
-    case 'w': { //w=white list of barcodes from short-reads
+    case 'k': { //k=list of known barcodes
       string file_name(optarg);
       cerr << "Reading barcode file "<< file_name << endl;
-      /**** READ BARCODE WHITE LIST FROM FILE ******/
+      /**** READ BARCODE LIST FROM FILE ******/
       file.open(file_name);
       if(!(file.good())){
 	cerr << "Unable to open file: " << file_name << endl;
@@ -304,15 +275,6 @@ int main(int argc, char **argv){
       file.close();
       cerr << "Done reading barcode file " << file_name << endl;
       params+=2;
-      break; }
-    case 'd':{
-      expected_cells=atoi(optarg);
-      params+=2;
-      break;
-    }
-    case 's':{
-      split_file_by_barcode=get_bool_opt_arg(optarg);
-      params+=2;
       break;
     }
     case 'r':{
@@ -320,18 +282,6 @@ int main(int argc, char **argv){
       params+=2;
       break;
     }
-      /**    case 't':{
-      out_stat_filename=optarg;
-      cerr << "Setting stats table file prefix to: " << out_stat_filename << endl;
-      params+=2;
-      break;
-    }      
-    case 'o':{
-      out_read_filename=optarg;
-      cerr << "Setting output read file prefix to: " << out_read_filename << endl;
-      params+=2;
-      break;
-      }**/
     case 'e':{
       edit_distance=atoi(optarg);
       cerr << "Setting max barcode edit distance to "<< edit_distance << endl;
@@ -366,7 +316,7 @@ int main(int argc, char **argv){
     case 'b':{
       int bl=atoi(optarg);
       search_patterns.temp_barcode=string(bl,'?');
-      cerr << "Setting UMI length to " << bl << endl;
+      cerr << "Setting barcode length to " << bl << endl;
       params+=2;
       break;
     }
@@ -377,110 +327,45 @@ int main(int argc, char **argv){
       break; 
     }
   }
-  
+
+  istream * in;
   //check that a read file is given
   if(params>=argc){
-    cerr << "Reads input file missing" << endl;
-    print_usage();
-    exit(1);
-  }
-    
-     
-  // check that the reads file is okay
-  string reads_file=argv[params];
-  file.open(reads_file);
-  if(!(file.good())){
-    cerr << "Unable to open file " << reads_file << endl;
-    print_usage();
-    exit(1);
-  }
-
-  // more checks...
-  if((expected_cells==0) & (known_barcodes.size()==0)){
-    cerr << "Unclear how barcodes should be obtained. "
-	 << "Either set -d > 0 or provide a barcode white list" << endl;
-    print_usage();
-    exit(1);
-  }
-  
-  //set the output filenames
-  out_stat_filename=reads_file+"-barcodes_assigned.txt"; 
-  out_read_filename=reads_file+"-barcodes_assigned"; //add .fastq or .fasta later..
-  
-  // *** GET THE BARCODE FROM THE READ DATA DIRECTLY ****/
-  if(expected_cells>0){
-    cerr << "Getting barcodes directly from read data" << endl;
-    // A few constanst related to capturing barcdoes from the data:
-    int BEGIN_SEARCH_LENGTH=100; //length to search for quick check
-    int MAX_NOVEL_BARCODE=expected_cells*10000; //Sample until max. 10x number expected
-    int novel_bc_counter=0;
-    unordered_map<string,int> novel_barcodes;
-    //Now if option to get barcodes from data is set get these:
-    while ( getline (file,line) && novel_bc_counter < MAX_NOVEL_BARCODE){
-      //is the file a fastq or a fasta?
-      istringstream line_stream(line);
-      string read_id;
-      line_stream >> read_id;
-      bool is_fastq=true;
-      if (read_id[0] == '>'){ is_fastq=false;
-      } else if (read_id[0] == '@'){ //fasta
-      } else {
-	cerr << "Unknown read format... exiting" << endl; exit(1);
-      }
-      getline(file,line);
-      string line_begin=line.substr(0,BEGIN_SEARCH_LENGTH);
-      //get sequences with perfect adapter seq.
-      Barcode barcode=get_barcode(line_begin,NULL,0,0,search_patterns);//fix
-      if(barcode.flank_editd==0){
-	novel_barcodes[barcode.barcode]++;
-	novel_bc_counter++;
-      }
-      for(int s=0; is_fastq && s<2; s++) getline (file,line);
-    }
-    
-    // now process the novel barcodes:
-    // loop over the barcode list twice.
-    // first to get the threshhold, then to apply it.
-    unordered_map<string,int>::iterator novel_barcodes_itr=novel_barcodes.begin();
-    vector<int> temp_value;
-    
-    for(; novel_barcodes_itr!=novel_barcodes.end(); novel_barcodes_itr++)
-      temp_value.push_back(novel_barcodes_itr->second);
-    sort(temp_value.begin(),temp_value.end());
-    int temp_i; int temp_cut;
-    if(temp_value.size() > 0){
-      temp_i=temp_value.size()-expected_cells;
-      temp_cut=temp_value.at(max(0,temp_i));
-    }
-    //loop again
-    cerr << "Barcodes from white list: " << known_barcodes.size() << endl;
-    novel_barcodes_itr=novel_barcodes.begin();
-    for(; novel_barcodes_itr!=novel_barcodes.end(); novel_barcodes_itr++){
-      if(novel_barcodes_itr->second >= temp_cut)
-	known_barcodes.insert(novel_barcodes_itr->first);
-    }
-    cerr << "Total Barcodes (from white list and read): " << known_barcodes.size() << endl;
-    cerr << "Done getting barcodes directly from read data" << endl;
-
-    file.close(); //close and reopen file for reading
+    cerr << "No filename given... getting reads from stdin..." << endl;
+    in=&std::cin;
+  } else {
+    // check that the reads fileis okay
+    string reads_file=argv[params];
     file.open(reads_file);
+    if(!(file.good())){
+      cerr << "Unable to open file " << reads_file << endl;
+      print_usage();
+      exit(1);
+    }
+    in=&file;
   }
+    
+  //set the output filenames
+  out_stat_filename="flexiplex-reads_barcodes.txt";
+  out_bc_filename="flexiplex-barcodes_counts.txt"; 
 
   //  ProfilerStart("my.prof");
   
-  /********* FIND BARCODE IN READS (again, this time allowing mismatches *****/
+  /********* FIND BARCODE IN READS ********/
   string sequence;
   int bc_count=0;
   int r_count=0;
   int multi_bc_count=0;
-
+  
   ofstream out_stat_file;
-  out_stat_file.open(out_stat_filename);
-  out_stat_file << "Read\tCellBarcode\tFlankEditDist\tBarcodeEditDist\tNextBestBarcodeEditDist"<<endl;
-
-  cerr << "Assigning barcodes..." << endl;
+  if(known_barcodes.size()>0){
+    out_stat_file.open(out_stat_filename);
+    out_stat_file << "Read\tCellBarcode\tFlankEditDist\tBarcodeEditDist\tNextBestBarcodeEditDist"<<endl;
+  }
+  cerr << "Searching for barcodes..." << endl;
   bool is_fastq=true;
-  while ( getline (file,line) ){
+  unordered_map< string, int > barcode_counts; 
+  while ( getline (*in,line) ){
     istringstream line_stream(line);
     string read_id;
     line_stream >> read_id;
@@ -491,25 +376,33 @@ int main(int argc, char **argv){
       cerr << "Unknown read format... exiting" << endl; exit(1);
     }
     read_id.erase(0,1);
-    if(getline (file,line)){
-      r_count++;
+    if(getline (*in,line)){
+      r_count++; //progress counter
+      if(r_count % 100000 == 0)
+	cerr << r_count/1000 << " thousand reads processed.." << endl;
+      
       //forward search
       vector<Barcode> vec_bc_for=big_barcode_search(line,known_barcodes,
 						    flank_edit_distance,edit_distance,search_patterns);
+      for(int b=0; b<vec_bc_for.size(); b++)
+	barcode_counts[vec_bc_for.at(b).barcode]++;
       string rev_line=line;
       reverse_compliment(rev_line);
       //Check the reverse compliment of the read
       vector<Barcode> vec_bc_rev=big_barcode_search(rev_line,known_barcodes,
 						    flank_edit_distance,edit_distance,search_patterns);
+      for(int b=0; b<vec_bc_rev.size(); b++)
+	barcode_counts[vec_bc_rev.at(b).barcode]++;
+
       if((vec_bc_for.size()+vec_bc_rev.size())>0)
 	bc_count++;
       if((vec_bc_for.size()+vec_bc_rev.size())>1 ){
 	multi_bc_count++;
-	//	continue;
       }
-      if(r_count % 100000 == 0)
-	cerr << r_count/1000 << " thousand reads processed.." << endl;
 
+      if(known_barcodes.size()==0)
+	continue; // if we are just looking for all possible barcodes don't output reads etc.
+      
       print_stats(read_id, vec_bc_for, out_stat_file);
       print_stats(read_id, vec_bc_rev, out_stat_file);
 
@@ -522,13 +415,39 @@ int main(int argc, char **argv){
     }
   }
   file.close();
-  out_stat_file.close();
-  
+
   cerr << "Number of reads processed: " << r_count << endl;
-  cerr << "Number of reads assigned a barcode: " << bc_count << endl;
-  cerr << "Number of reads assigned more than one barcode: " << multi_bc_count << endl;
+  cerr << "Number of reads where a barcode was found: " << bc_count << endl;
+  cerr << "Number of reads where more than one barcode was found: " << multi_bc_count << endl;
   cerr << "All done!" << endl;
 
-  //  ProfilerStop();
+  if(known_barcodes.size()>0){
+    out_stat_file.close();
+    return(0);
+  }
   
+  if(barcode_counts.size()==0)
+    return(0);
+  
+  typedef std::pair<std::string, int> pair;
+  vector<pair> bc_vec;
+  copy(barcode_counts.begin(),barcode_counts.end(), back_inserter<vector<pair>>(bc_vec));
+  sort(bc_vec.begin(), bc_vec.end(),[](const pair &l, const pair &r){
+    if (l.second != r.second)
+      return l.second > r.second;
+    return l.first < r.first;
+  });
+  vector<int> hist(bc_vec[0].second);
+  ofstream out_bc_file;
+  out_bc_file.open(out_bc_filename);
+  for (auto const &bc_pair: bc_vec){
+    out_bc_file << bc_pair.first << "\t" << bc_pair.second << endl;
+    hist[bc_pair.second-1]++;
+  }
+  out_bc_file.close();
+
+  cout << "Reads\tBarcodes" << endl;
+  for(int i=hist.size()-1; i>=0; i--)
+    cout << i+1 << "\t" << hist[i] << endl;
+    
 }
