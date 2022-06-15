@@ -201,6 +201,7 @@ void print_stats(string read_id, vector<Barcode> & vec_bc, ostream & out_stream)
 }
 
 void print_line(string id, string read, string quals, ostream & out_stream){
+
   //flag for read format
   bool is_fastq=!(quals==""); //no quality scores passed = fasta
 
@@ -217,15 +218,18 @@ void print_line(string id, string read, string quals, ostream & out_stream){
 }
 
 //print fastq or fasta lines..
-void print_read(string read_id,string read, string qual, vector<Barcode> & vec_bc,
-		ostream & out_stream){
+void print_read(string read_id,string read, string qual,
+		vector<Barcode> & vec_bc, string prefix,
+		bool split, unordered_set<string> & found_barcodes,
+		bool trim_barcodes){
   //loop over the barcodes found... usually will just be one
   for(int b=0; b<vec_bc.size() ; b++){
     
     //format the new read id. Using FLAMES format.
     stringstream ss;
     ss << (b+1) << "of" << vec_bc.size() ;
-    string new_read_id=vec_bc.at(b).barcode+"_"+vec_bc.at(b).umi+"#"+read_id+ss.str();
+    string barcode=vec_bc.at(b).barcode;
+    string new_read_id=barcode+"_"+vec_bc.at(b).umi+"#"+read_id+ss.str();
     
     // work out the start and end base in case multiple barcodes
     int read_start=vec_bc.at(b).flank_end;
@@ -237,10 +241,28 @@ void print_read(string read_id,string read, string qual, vector<Barcode> & vec_b
     }
     string qual_new=""; //don't trim the quality scores if it's a fasta file
     if(qual!="") qual_new=qual.substr(read_start,read_length);
-    print_line(new_read_id,
-	       read.substr(read_start,read_length),
-	       qual_new,
-	       out_stream);
+    string read_new=read.substr(read_start,read_length);
+
+    if(b==0 && !trim_barcodes){ //override if read shouldn't be cut
+      new_read_id=read_id;
+      read_new=read;
+      qual_new=qual;
+      b=vec_bc.size(); //force loop to exit after this iteration
+    }
+    
+    if(split){ //to a file if spliting by barcode
+      string outname=prefix+"_"+barcode+".";
+      if(qual=="") outname+="fasta"; else outname+="fastq";
+      ofstream outstream;
+      if(found_barcodes.insert(barcode).second)
+	outstream.open(outname); //override file if this is the first read for the barcode
+      else
+	outstream.open(outname,ofstream::app); //remove file if this is the first read for the barcode
+      print_line(new_read_id,read_new,qual_new,outstream);
+      outstream.close();
+    } else {
+      print_line(new_read_id,read_new,qual_new,std::cout);
+    }
   }
 }
 
@@ -258,9 +280,9 @@ int main(int argc, char **argv){
   int flank_edit_distance=10; //(f)
 
   //set the output filenames
-  string out_stat_filename="flexiplex-reads_barcodes.txt";
-  string out_bc_filename="flexiplex-barcodes_counts.txt";
-  string out_filename_prefix=""; //(n)
+  string out_stat_filename="reads_barcodes.txt";
+  string out_bc_filename="barcodes_counts.txt";
+  string out_filename_prefix="flexiplex"; //(n)
 
   bool split_file_by_barcode=false; //(s)
   bool remove_barcodes=true; //(r)
@@ -270,10 +292,10 @@ int main(int argc, char **argv){
   search_patterns.polyA = string(9,'T'); //(T)
   search_patterns.umi_seq = string(12,'?'); //(length u)
   search_patterns.temp_barcode = string(16,'?'); //(length b)
-
   
   //Set of known barcodes 
   unordered_set<string> known_barcodes;
+  unordered_set<string> found_barcodes;
 
   /*** Pass command line option *****/
   int c;
@@ -357,14 +379,18 @@ int main(int argc, char **argv){
     case 'n':{
       out_filename_prefix=optarg;
       cerr << "Setting output filename prefix to: " << out_filename_prefix << endl;
-      out_stat_filename=out_filename_prefix+"_"+out_stat_filename;
-      out_bc_filename=out_filename_prefix+"_"+out_bc_filename;
       params+=2;
       break;
     }
     case 's':{
-      cerr << "Reads will be split into separate files by barcode" << endl;
       split_file_by_barcode=get_bool_opt_arg(optarg);
+      cerr << "Split read output into separate files by barcode: " << split_file_by_barcode << endl;
+      int max_split_bc=50;
+      if(known_barcodes.size()>max_split_bc){
+	cerr << "Too many barcodes to split into separate files: "<< known_barcodes.size()
+	     << "> "<< max_split_bc<< endl;
+	split_file_by_barcode=false;
+      }
       params+=2;
       break;
     }
@@ -403,6 +429,10 @@ int main(int argc, char **argv){
   int multi_bc_count=0;
   
   ofstream out_stat_file;
+  out_stat_filename=out_filename_prefix+"_"+out_stat_filename;
+  out_bc_filename=out_filename_prefix+"_"+out_bc_filename;
+  params+=2;
+
   if(known_barcodes.size()>0){
     out_stat_file.open(out_stat_filename);
     out_stat_file << "Read\tCellBarcode\tFlankEditDist\tBarcodeEditDist\tNextBestBarcodeEditDist"<<endl;
@@ -454,13 +484,12 @@ int main(int argc, char **argv){
       string qual_scores="";
       if(is_fastq)
 	for(int s=0; is_fastq && s<2; s++) getline (file,qual_scores);
-      if(!remove_barcodes && (vec_bc_for.size()+vec_bc_rev.size())>0)
-	print_line(read_id,line,qual_scores,std::cout);
-      else {
-	print_read(read_id+"_+",line,qual_scores,vec_bc_for,std::cout);
-	reverse(qual_scores.begin(),qual_scores.end());
-	print_read(read_id+"_-",rev_line,qual_scores,vec_bc_rev,std::cout);
-      }
+
+      print_read(read_id+"_+",line,qual_scores,vec_bc_for,out_filename_prefix,
+		 split_file_by_barcode,found_barcodes,remove_barcodes);
+      reverse(qual_scores.begin(),qual_scores.end());
+      print_read(read_id+"_-",rev_line,qual_scores,vec_bc_rev,out_filename_prefix,
+		 split_file_by_barcode,found_barcodes,remove_barcodes);
     }
   }
   file.close();
