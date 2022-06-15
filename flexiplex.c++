@@ -440,57 +440,67 @@ int main(int argc, char **argv){
   cerr << "Searching for barcodes..." << endl;
   bool is_fastq=true;
   unordered_map< string, int > barcode_counts; 
-  while ( getline (*in,line) ){
-    istringstream line_stream(line);
-    string read_id;
-    line_stream >> read_id;
-    int lines_to_skip=0;
-    if (read_id[0] == '>'){ is_fastq=false;
-    } else if (read_id[0] == '@'){ //fasta
+  string read_id_line;
+  if(getline (*in,read_id_line)){ //check the first line for file type
+    if(read_id_line[0]=='>'){ is_fastq=false;
+    } else if (read_id_line[0] == '@'){ //fasta
     } else {
       cerr << "Unknown read format... exiting" << endl; exit(1);
     }
+  }
+  while ( getline (*in,line) ){
+    string read_id;
+    istringstream line_stream(read_id_line);
+    line_stream >> read_id;
     read_id.erase(0,1);
-    if(getline (*in,line)){
-      r_count++; //progress counter
-      if(r_count % 100000 == 0)
-	cerr << r_count/1000 << " thousand reads processed.." << endl;
-      
-      //forward search
-      vector<Barcode> vec_bc_for=big_barcode_search(line,known_barcodes,
-						    flank_edit_distance,edit_distance,search_patterns);
-      for(int b=0; b<vec_bc_for.size(); b++)
-	barcode_counts[vec_bc_for.at(b).barcode]++;
-      string rev_line=line;
-      reverse_compliment(rev_line);
-      //Check the reverse compliment of the read
-      vector<Barcode> vec_bc_rev=big_barcode_search(rev_line,known_barcodes,
-						    flank_edit_distance,edit_distance,search_patterns);
-      for(int b=0; b<vec_bc_rev.size(); b++)
-	barcode_counts[vec_bc_rev.at(b).barcode]++;
-
-      if((vec_bc_for.size()+vec_bc_rev.size())>0)
-	bc_count++;
-      if((vec_bc_for.size()+vec_bc_rev.size())>1 ){
-	multi_bc_count++;
-      }
-
-      if(known_barcodes.size()==0)
-	continue; // if we are just looking for all possible barcodes don't output reads etc.
-      
-      print_stats(read_id, vec_bc_for, out_stat_file);
-      print_stats(read_id, vec_bc_rev, out_stat_file);
-      
-      string qual_scores="";
-      if(is_fastq)
-	for(int s=0; is_fastq && s<2; s++) getline (file,qual_scores);
-
-      print_read(read_id+"_+",line,qual_scores,vec_bc_for,out_filename_prefix,
-		 split_file_by_barcode,found_barcodes,remove_barcodes);
-      reverse(qual_scores.begin(),qual_scores.end());
-      print_read(read_id+"_-",rev_line,qual_scores,vec_bc_rev,out_filename_prefix,
-		 split_file_by_barcode,found_barcodes,remove_barcodes);
+    
+    string buffer; //account for fasta's with multi-lines per reads
+    if(!is_fastq){
+      while(getline(*in,buffer) && buffer[0]!='>')
+	line+=buffer;
+      read_id_line=buffer;
     }
+      
+    r_count++; //progress counter
+    if(r_count % 100000 == 0)
+      cerr << r_count/1000 << " thousand reads processed.." << endl;
+    
+    //forward search
+    vector<Barcode> vec_bc_for=big_barcode_search(line,known_barcodes,
+						  flank_edit_distance,edit_distance,search_patterns);
+    for(int b=0; b<vec_bc_for.size(); b++)
+      barcode_counts[vec_bc_for.at(b).barcode]++;
+    string rev_line=line;
+    reverse_compliment(rev_line);
+    //Check the reverse compliment of the read
+    vector<Barcode> vec_bc_rev=big_barcode_search(rev_line,known_barcodes,
+						  flank_edit_distance,edit_distance,search_patterns);
+    for(int b=0; b<vec_bc_rev.size(); b++)
+      barcode_counts[vec_bc_rev.at(b).barcode]++;
+    
+    if((vec_bc_for.size()+vec_bc_rev.size())>0)
+	bc_count++;
+    if((vec_bc_for.size()+vec_bc_rev.size())>1 ){
+      multi_bc_count++;
+    }
+    
+    if(known_barcodes.size()==0)
+      continue; // if we are just looking for all possible barcodes don't output reads etc.
+      
+    print_stats(read_id, vec_bc_for, out_stat_file);
+    print_stats(read_id, vec_bc_rev, out_stat_file);
+    
+    string qual_scores="";
+    if(is_fastq){
+      for(int s=0; s<2; s++) getline(*in,qual_scores);
+      getline(*in,read_id_line);
+    }
+    
+    print_read(read_id+"_+",line,qual_scores,vec_bc_for,out_filename_prefix,
+	       split_file_by_barcode,found_barcodes,remove_barcodes);
+    reverse(qual_scores.begin(),qual_scores.end());
+    print_read(read_id+"_-",rev_line,qual_scores,vec_bc_rev,out_filename_prefix,
+	       split_file_by_barcode,found_barcodes,remove_barcodes);
   }
   file.close();
   
