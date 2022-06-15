@@ -21,21 +21,30 @@
 
 using namespace std;
 
+const static string VERSION="0.9";
+
 // the help information which is printed when a user puts in the wrong
 // combination of command line options.
 void print_usage(){
-  cerr << "usage: flexiplex [options] reads_input"  << endl;
-  cerr << "  reads_input: a .fastq or .fasta file" << endl;
+  cerr << "usage: flexiplex [options] [reads_input]"  << endl;
+  cerr << "  reads_input: a .fastq or .fasta file. Will read from stdin if empty." << endl;
   cerr << "  options: " << endl;
-  cerr << "     -k known_list  Text file of expected barcodes (one row per barcode)." << endl; 
-  cerr << "                    if not provided, flexiplex will accept any sequence as a barcodes. " << endl; 
-  cerr << "     -p primer  Left flank sequence to search for (default: CTACACGACGCTCTTCCGATCT)" << endl;
-  cerr << "     -T polyT   Right flank sequence to search for (default: TTTTTTTTT)" << endl;
-  cerr << "     -b N   Barcode length (default: 16)" << endl;
-  cerr << "     -u N   UMI length (default: 12)" << endl;
-  cerr << "     -e N   Maximum edit distance to barcode (default 2)" << endl;
-  cerr << "     -f N   Maximum edit distance to primer+ployT (default 10)" << endl;
-  cerr << "     -r true/false   Whether to remove barcode sequence from reads" << endl;
+  cerr << "     -k known_list   Either 1) a text file of expected barcodes in the first column," << endl; 
+  cerr << "                     one row per barcode, or 2) acomma separate string of barcodes. " << endl;
+  cerr << "                     Without this option, flexiplex will search and report possible barcodes." << endl;
+  cerr << "                     The generated list can be used for known_list in subsequent runs." << endl; 
+  cerr << "     -r true/false   Replace read ID with barcodes+UMI, remove search strings" << endl;
+  cerr << "                     including flanking sequenence and split read if multiple" << endl;
+  cerr << "                     barcodes found (default: true)." << endl;
+  cerr << "     -s true/false   Sort reads into separate files by barcode (default: false)" << endl;
+  cerr << "     -p primer   Left flank sequence to search for (default: CTACACGACGCTCTTCCGATCT)." << endl;
+  cerr << "     -T polyT    Right flank sequence to search for (default: TTTTTTTTT)." << endl;
+  cerr << "     -n prefix   Prefix for output filenames." << endl;
+  cerr << "     -b N   Barcode length (default: 16)." << endl;
+  cerr << "     -u N   UMI length (default: 12)." << endl;
+  cerr << "     -e N   Maximum edit distance to barcode (default 2)." << endl;
+  cerr << "     -f N   Maximum edit distance to primer+ployT (default 10)." << endl;
+  cerr << "     -h     Print this usage information." << endl;
   cerr << endl;
 }
 
@@ -191,37 +200,47 @@ void print_stats(string read_id, vector<Barcode> & vec_bc, ostream & out_stream)
   }
 }
 
-//print fastq or fasta lines..
-void print_read(string read_id, string read, string qual, vector<Barcode> & vec_bc, ostream & out_stream){
+void print_line(string id, string read, string quals, ostream & out_stream){
   //flag for read format
-  bool is_fastq=!(qual==""); //no quality scores passed = fasta
+  bool is_fastq=!(quals==""); //no quality scores passed = fasta
 
+  //output to the new read file
+    if(is_fastq)
+      out_stream << "@" << id << endl;
+    else
+      out_stream << ">" << id << endl;
+    out_stream << read << endl;
+    if(is_fastq){
+      out_stream << "+" << id << endl;
+      out_stream << quals << endl;
+    }
+}
+
+//print fastq or fasta lines..
+void print_read(string read_id,string read, string qual, vector<Barcode> & vec_bc,
+		ostream & out_stream){
   //loop over the barcodes found... usually will just be one
   for(int b=0; b<vec_bc.size() ; b++){
-
+    
     //format the new read id. Using FLAMES format.
     stringstream ss;
     ss << (b+1) << "of" << vec_bc.size() ;
     string new_read_id=vec_bc.at(b).barcode+"_"+vec_bc.at(b).umi+"#"+read_id+ss.str();
     
-    // work out the end base in case multiple barcodes
-    int read_length=read.length()-vec_bc.at(b).flank_end;
+    // work out the start and end base in case multiple barcodes
+    int read_start=vec_bc.at(b).flank_end;
+    int read_length=read.length()-read_start;
     for(int f=0; f<vec_bc.size(); f++){
-      int temp_read_length=vec_bc.at(f).flank_start-vec_bc.at(b).flank_end;
+      int temp_read_length=vec_bc.at(f).flank_start-read_start;
       if(temp_read_length>0 && temp_read_length<read_length)
 	read_length=temp_read_length;
     }
-    
-    //output to the new read file
-    if(is_fastq)
-      out_stream << "@" << new_read_id << endl;
-    else
-      out_stream << ">" << new_read_id << endl;
-    out_stream << read.substr(vec_bc.at(b).flank_end,read_length) << endl;
-    if(is_fastq){
-      out_stream << "+" << new_read_id << endl;
-      out_stream << qual.substr(vec_bc.at(b).flank_end,read_length) << endl;
-    }
+    string qual_new=""; //don't trim the quality scores if it's a fasta file
+    if(qual!="") qual_new=qual.substr(read_start,read_length);
+    print_line(new_read_id,
+	       read.substr(read_start,read_length),
+	       qual_new,
+	       out_stream);
   }
 }
 
@@ -229,13 +248,20 @@ void print_read(string read_id, string read, string qual, vector<Barcode> & vec_
 // MAIN is here!!
 int main(int argc, char **argv){
 
+  cerr << "FLEXIPLEX " << VERSION << endl;
+
+  
   //Variables to store user options
   //Set these to their defaults
   int expected_cells=0; //(d)
   int edit_distance=2; //(e)
   int flank_edit_distance=10; //(f)
-  string out_bc_filename=""; //(o)
-  string out_stat_filename=""; //(t)
+
+  //set the output filenames
+  string out_stat_filename="flexiplex-reads_barcodes.txt";
+  string out_bc_filename="flexiplex-barcodes_counts.txt";
+  string out_filename_prefix=""; //(n)
+
   bool split_file_by_barcode=false; //(s)
   bool remove_barcodes=true; //(r)
   
@@ -245,6 +271,7 @@ int main(int argc, char **argv){
   search_patterns.umi_seq = string(12,'?'); //(length u)
   search_patterns.temp_barcode = string(16,'?'); //(length b)
 
+  
   //Set of known barcodes 
   unordered_set<string> known_barcodes;
 
@@ -254,31 +281,34 @@ int main(int argc, char **argv){
   ifstream file;
   string line;
 
-  while((c =  getopt(argc, argv, "k:e:d:s:o:t:r:f:p:T:u:b:")) != EOF){
+  while((c =  getopt(argc, argv, "k:r:p:T:b:u:e:f:n:s:h")) != EOF){
     switch(c){
     case 'k': { //k=list of known barcodes
       string file_name(optarg);
-      cerr << "Reading barcode file "<< file_name << endl;
+      string bc;
       /**** READ BARCODE LIST FROM FILE ******/
       file.open(file_name);
-      if(!(file.good())){
-	cerr << "Unable to open file: " << file_name << endl;
-	exit(1);
+      cerr << "Setting known barcodes from "<< file_name << endl;
+      if(!(file.good())){ //if the string given isn't a file
+	stringstream bc_list(file_name); string s;
+	while (getline(bc_list, bc, ',')) //tokenize
+	  known_barcodes.insert(bc);
+      } else {
+	// otherwise get the barcodes from the file..
+	while ( getline (file,line) ){
+	  istringstream line_stream(line);
+	  line_stream >> bc;
+	  known_barcodes.insert(bc); 
+	}
+	file.close();
       }
-      while ( getline (file,line) ){
-	string bc;
-	istringstream line_stream(line);
-	line_stream >> bc;
-	known_barcodes.insert(bc); 
-      }
-      cerr << "Barcodes read: " << known_barcodes.size() << endl;
-      file.close();
-      cerr << "Done reading barcode file " << file_name << endl;
+      cerr << "Number of known barcodes: " << known_barcodes.size() << endl;
       params+=2;
       break;
     }
     case 'r':{
       remove_barcodes=get_bool_opt_arg(optarg);
+      cerr << "Setting read IDs to be replaced: "<< remove_barcodes << endl;
       params+=2;
       break;
     }
@@ -320,14 +350,33 @@ int main(int argc, char **argv){
       params+=2;
       break;
     }
+    case 'h':{
+      print_usage();
+      exit(1);
+    }
+    case 'n':{
+      out_filename_prefix=optarg;
+      cerr << "Setting output filename prefix to: " << out_filename_prefix << endl;
+      out_stat_filename=out_filename_prefix+"_"+out_stat_filename;
+      out_bc_filename=out_filename_prefix+"_"+out_bc_filename;
+      params+=2;
+      break;
+    }
+    case 's':{
+      cerr << "Reads will be split into separate files by barcode" << endl;
+      split_file_by_barcode=get_bool_opt_arg(optarg);
+      params+=2;
+      break;
+    }
     case '?': //other unknown options
       cerr << "Unknown option.. stopping" << endl;
       print_usage();
       exit(1);
-      break; 
     }
   }
 
+  cerr << "For usage information type: flexiplex -h" << endl;
+  
   istream * in;
   //check that a read file is given
   if(params>=argc){
@@ -345,10 +394,6 @@ int main(int argc, char **argv){
     in=&file;
   }
     
-  //set the output filenames
-  out_stat_filename="flexiplex-reads_barcodes.txt";
-  out_bc_filename="flexiplex-barcodes_counts.txt"; 
-
   //  ProfilerStart("my.prof");
   
   /********* FIND BARCODE IN READS ********/
@@ -405,17 +450,21 @@ int main(int argc, char **argv){
       
       print_stats(read_id, vec_bc_for, out_stat_file);
       print_stats(read_id, vec_bc_rev, out_stat_file);
-
+      
       string qual_scores="";
       if(is_fastq)
 	for(int s=0; is_fastq && s<2; s++) getline (file,qual_scores);
-      print_read(read_id+"_+",line,qual_scores,vec_bc_for, std::cout);
-      reverse(qual_scores.begin(),qual_scores.end());
-      print_read(read_id+"_-",rev_line,qual_scores,vec_bc_rev, std::cout);
+      if(!remove_barcodes && (vec_bc_for.size()+vec_bc_rev.size())>0)
+	print_line(read_id,line,qual_scores,std::cout);
+      else {
+	print_read(read_id+"_+",line,qual_scores,vec_bc_for,std::cout);
+	reverse(qual_scores.begin(),qual_scores.end());
+	print_read(read_id+"_-",rev_line,qual_scores,vec_bc_rev,std::cout);
+      }
     }
   }
   file.close();
-
+  
   cerr << "Number of reads processed: " << r_count << endl;
   cerr << "Number of reads where a barcode was found: " << bc_count << endl;
   cerr << "Number of reads where more than one barcode was found: " << multi_bc_count << endl;
