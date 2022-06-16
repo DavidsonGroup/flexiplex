@@ -1,4 +1,35 @@
-## Welcome to GitHub Pages
+# What does flexiplex do
+
+Flexiplex is a light weight, flexible, error tolerant search and demultiplex tool. Given a set of reads as either .fastq or .fasta it will demultiplex and/or identify target sequences, reporting matching reads and a table of read-sequence assignments. It has been designed to demultuplex single cell long read RNA-Seq data, but can be used on any read data like an error tolerance "grep".
+
+<pic>
+  
+<pic>
+
+
+# Installing flexiplex
+Download and untar the latex package:
+
+If using linux or mac run you can run the code directly as
+...
+and 
+... 
+respectively
+otherwise, compile the code with
+make flexiplex.c++
+
+# Examples of use
+
+## Assigning single cell reads to 10x cellular barcodes
+  
+## Assigning single cell reads to 10x cellular barcodes (without knowing the barcodes)
+
+## Demultiplexing bulk read data by barcode
+
+## Assigning karyotype to cells
+
+
+
 
 You can use the [editor on GitHub](https://github.com/DavidsonGroup/flexiplex/edit/gh-pages/index.md) to maintain and preview the content for your website in Markdown files.
 
