@@ -1,22 +1,20 @@
-# What does flexiplex do
+# What does flexiplex do?
 
-Flexiplex is a light weight, flexible, error tolerant search and demultiplex tool. Given a set of reads as either .fastq or .fasta it will demultiplex and/or identify target sequences, reporting matching reads and a table of read-sequence assignments. It has been designed to demultuplex single cell long read RNA-Seq data, but can be used on any read data like an error tolerance "grep".
-
-<pic>
-  
-<pic>
+Flexiplex is a light weight, flexible, error tolerant search and demultiplex tool. Given a set of reads as either .fastq or .fasta it will demultiplex and/or identify target sequences, reporting matching reads and read-sequence assignment. It has been designed to demultuplex single cell long read RNA-Seq data, but can be used on any read data like an error tolerance "grep". Flexiplex is built on [edlib](https://github.com/Martinsos/edlib). 
 
 
 # Installing flexiplex
-Download and untar the latex package:
+Clone the [git repository](https://github.com/DavidsonGroup/flexiplex):
+```git clone https://github.com/DavidsonGroup/flexiplex.git```
 
-If using linux or mac run you can run the code directly as
-...
-and 
-... 
-respectively
-otherwise, compile the code with
-make flexiplex.c++
+change into the source directory and compile:
+```cd flexiplex ; make``
+
+You should now have a binary file called flexiplex which you can execute
+
+# Options
+
+# Output
 
 # Examples of use
 
@@ -27,8 +25,6 @@ make flexiplex.c++
 ## Demultiplexing bulk read data by barcode
 
 ## Assigning karyotype to cells
-
-
 
 
 You can use the [editor on GitHub](https://github.com/DavidsonGroup/flexiplex/edit/gh-pages/index.md) to maintain and preview the content for your website in Markdown files.
