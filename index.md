@@ -152,12 +152,50 @@ The NextBestBarcodeEditDist column is not currently filled.
 
 ### Table of barcode frequency
 
-  
+This will be a file called flexiplex_barcodes_counts.txt or <prefix>_reads_barcodes.txt if the -n option was provided. It will only be created if flexiplex is run in barcode discovery mode (no barcode list provided with -k).
+ 
+It lists the number of reads that each barcode was found in, ordered by the more frequent. e.g. for a small dataset
+```
+GATCGATTCATCGCTC	15
+AACCATGCACCTTGTC	12
+ACGTCAAGTTTAAGCC	11
+GTAACTGCATTGGGCC	11
+AAGGCAGCATGGGAAC	10
+ATGCGATTCACCTTAT	10
+GATGCTAGTACAGCAG	10
+GCAGCCATCATGCATG	10
+GTTCATTCAATGTTGC	10
+...
+```
+If the approximate number of cells is estimated, the top of this list can be used to generate a list of known barcodes e.g.
+```
+head -n <number of cell> flexiplex_barcodes_counts.txt > known_barcodes.txt
+```
+Then flexiplex run with -k known_barcodes.txt to more accurately assign the barcodes to reads (note that the second column in known_barcodes.txt gets ignored).
   
 ### Table of the number of barcode at each barcode frequency
 
 This is printed to standard output when no barcodes are provided (ie. flexiplex is in barcode discovery mode and -k not provided).
-e.g.   
+e.g. for a small dataset:
+```
+Reads	Barcodes
+15	1
+14	0
+13	0
+12	1
+11	2
+10	5
+9	6
+8	13
+7	22
+6	17
+5	29
+4	62
+3	86
+2	124
+1	1867
+```
+The first line can be interpreted as there was 1 barcode which was found in 15 reads etc. This data is provided to help work out how many cells were sequenced (e.g. by creating a knee plot).
   
 # Support or Contact
 
