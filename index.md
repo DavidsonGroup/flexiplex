@@ -43,6 +43,8 @@ usage: flexiplex [options] [reads_input]
      -h     Print this usage information.
 ```
 
+![search sequence structure](/gh-pages/flexiplex/flexplex1.pdf)
+
 # Examples of use
 
 ## Assigning single cell reads to 10x 3' cellular barcodes (when barcodes are known)
