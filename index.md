@@ -16,7 +16,7 @@ cd flexiplex ; make
 
 You should now have a binary file called flexiplex which you can execute.
 To see usage information, run 
-```./flexiflex -h```
+```./flexiplex -h```
 
 # Usage
 
