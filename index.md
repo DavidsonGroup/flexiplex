@@ -126,17 +126,18 @@ Matching reads will be printed to standard out. Edit distances (-e and -f ) can 
 
 Read with a matching barcode will be reported to standard output (or to individual files if the -s true option is provided).
 
-If read chopping and ID replacement is used, -r true, which is the default:
+If read chopping and ID replacement is used (-r true, default):
   - Read IDs will be replaced with the following format (similar to FLAMES): <barcode>_<UMI>#<original ID>_<+/-><N>of<M> where <+/-> indicates whether the barcode was found on the forward or reverse strand of the original read, M is the number of barcodes found in direction indicated by +/- and N is the 1st, 2nd etc. of those barcode.
   - Reads will be reverse complimented if the barcode was found in the reverse direction. For 10x 3' data this puts all reads in the reverse direction of the mRNA (3'->5')
   - If multiple barcodes are found in the same direction the read is split at the position of the second or subsequent primer, and multiple reads reported.
   - The primer+barcode+umi+polyT sequence is removed from the read.
 If barcodes are found in both the forward and reverse directions on a read, the same read would be reported multiple time (once forward and once reverse). To overcome this duplication, data can be mapped as stranded
   
- If read chopping and ID replacement is not used, -r false:
-  - Reads are reported ??
-  
-  
+ If read chopping and ID replacement is not used (-r false):
+  - Any read with matching flank and barcode sequence will be reported with read ID appended with _<+/-> as above.
+  - Read is reported only once even if multiple flank/barcode sequences found
+  - If a flank/barcode is only found in the reverse direction, the read will be reverse complimented.
+
   
 ### Table of barcodes found for each read
 
