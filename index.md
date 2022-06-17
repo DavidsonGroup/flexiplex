@@ -43,7 +43,7 @@ usage: flexiplex [options] [reads_input]
      -h     Print this usage information.
 ```
 
-![search sequence structure](/gh-pages/flexiplex/flexplex1.pdf)
+![search sequence structure](/flexiplex/flexplex1.pdf)
 
 # Examples of use
 
@@ -134,6 +134,9 @@ If read chopping and ID replacement is used (-r true, default):
   - If multiple barcodes are found in the same direction the read is split at the position of the second or subsequent primer, and multiple reads reported.
   - The primer+barcode+umi+polyT sequence is removed from the read.
 If barcodes are found in both the forward and reverse directions on a read, the same read would be reported multiple time (once forward and once reverse). To overcome this duplication, data can be mapped as stranded
+  
+![Reads reported when multi-barcodes found (default behaviour)](/flexiplex/flexplex2.pdf)  
+  
   
  If read chopping and ID replacement is not used (-r false):
   - Any read with matching flank and barcode sequence will be reported with read ID appended with _<+/-> as above.
