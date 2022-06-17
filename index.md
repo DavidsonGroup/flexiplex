@@ -7,10 +7,11 @@ Flexiplex is a light weight, flexible, error tolerant search and demultiplex too
 Clone the [git repository](https://github.com/DavidsonGroup/flexiplex):
 ```git clone https://github.com/DavidsonGroup/flexiplex.git```
 
-change into the source directory and compile:
+Change into the source directory and compile:
 ```cd flexiplex ; make```
 
-You should now have a binary file called flexiplex which you can execute
+You should now have a binary file called flexiplex which you can execute.
+To see usage information, run ```./flexiflex -h```
 
 # Usage
 
