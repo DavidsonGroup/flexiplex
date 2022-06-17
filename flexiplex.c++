@@ -499,8 +499,9 @@ int main(int argc, char **argv){
     print_read(read_id+"_+",line,qual_scores,vec_bc_for,out_filename_prefix,
 	       split_file_by_barcode,found_barcodes,remove_barcodes);
     reverse(qual_scores.begin(),qual_scores.end());
-    print_read(read_id+"_-",rev_line,qual_scores,vec_bc_rev,out_filename_prefix,
-	       split_file_by_barcode,found_barcodes,remove_barcodes);
+    if(remove_barcodes || vec_bc_for.size()==0) //case we just want to print read once if multiple bc found.
+      print_read(read_id+"_-",rev_line,qual_scores,vec_bc_rev,out_filename_prefix,
+		 split_file_by_barcode,found_barcodes,remove_barcodes);
   }
   file.close();
   
