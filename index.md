@@ -47,17 +47,20 @@ usage: flexiplex [options] [reads_input]
 
 ## Assigning single cell reads to 10x cellular barcodes
   
-The default setting work for 10x 3' v3 chemistry. To demultiplex run:
+The default settings work for 10x 3' v3 chemistry. To demultiplex run:
 ```
-flexiplex -k barcode_list.txt reads.fastq > new_reads.fastq```
+flexiplex -k barcode_list.txt reads.fastq > new_reads.fastq
+```
 
-For 10bp UMIs use:
+Or for older chemistry with 10bp UMIs use:
 ```
-flexiplex -u 10 reads.fastq > new_reads.fastq```
+flexiplex -u 10 reads.fastq > new_reads.fastq
+```
 
 If dealing with large gzipped files you can pipe reads into flexiples. e.g.
 ```
-gunzip -c read.fastq.gz | flexiplex -k barcode_list.txt | gzip > new_reads.fastq.gz```
+gunzip -c read.fastq.gz | flexiplex -k barcode_list.txt | gzip > new_reads.fastq.gz
+```
   
 ## Assigning single cell reads to 10x cellular barcodes (without knowing the barcodes)
 
@@ -113,9 +116,35 @@ Matching reads will be printed to standard out. Edit distances (-e and -f ) can 
 
 ### new reads file
 
-### table of barcodes found for each read
+Read with a matching barcode will be reported to standard output (or to individual files if the -s true option is provided).
 
-### table of barcode frequency
+If read chopping and ID replacement is used, -r true, which is the default:
+  - Read IDs will be replaced with the following format (similar to FLAMES): <barcode>_<UMI>#<original ID>_<+/-><N>of<M> where <+/-> indicates whether the barcode was found on the forward or reverse strand of the original read, M is the number of barcodes found in direction indicated by +/- and N is the 1st, 2nd etc. of those barcode.
+  - Reads will be reverse complimented if the barcode was found in the reverse direction. For 10x 3' data this puts all reads in the reverse direction of the mRNA (3'->5')
+  - If multiple barcodes are found in the same direction the read is split at the position of the second or subsequent primer, and multiple reads reported.
+  - The primer+barcode+umi+polyT sequence is removed from the read.
+If barcodes are found in both the forward and reverse directions on a read, the same read would be reported multiple time (once forward and once reverse). To overcome this duplication, data can be mapped as stranded
+  
+ If read chopping and ID replacement is not used, -r false:
+  - Reads are reported ??
+  
+  
+  
+  
+  
+### Table of barcodes found for each read
+
+This will be a file called flexiplex_reads_barcodes.txt or <prefix>_reads_barcodes.txt if the -n option was provided.
+It is a tab delimited text file with a row for each barcode identified. e.g.
+```
+Read	CellBarcode	FlankEditDist	BarcodeEditDist	NextBestBarcodeEditDist
+SRR12282458.3	CTCAGAAGTTTGCATG	4	0	100
+SRR12282458.4	CGACTTCAGCTGTCTA	1	0	100
+...
+```
+The NextBestBarcodeEditDist column is not currently filled.
+
+### Table of barcode frequency
 
 ### table of the number of barcode at each barcode frequency
 
