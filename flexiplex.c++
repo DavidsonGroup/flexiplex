@@ -461,13 +461,17 @@ int main(int argc, char **argv){
     line_stream >> read_id;
     read_id.erase(0,1);
     
-    string buffer; //account for fasta's with multi-lines per reads
-    if(!is_fastq){
+    string qual_scores="";
+    if(!is_fastq){ //fastq (account for multi-lines per read)
+      string buffer; 
       while(getline(*in,buffer) && buffer[0]!='>')
 	line+=buffer;
       read_id_line=buffer;
+    } else { //fastq (get quality scores)
+      for(int s=0; s<2; s++) getline(*in,qual_scores);
+      getline(*in,read_id_line);
     }
-      
+    
     r_count++; //progress counter
     if(r_count % 100000 == 0)
       cerr << r_count/1000 << " thousand reads processed.." << endl;
@@ -486,7 +490,7 @@ int main(int argc, char **argv){
       barcode_counts[vec_bc_rev.at(b).barcode]++;
     
     if((vec_bc_for.size()+vec_bc_rev.size())>0)
-	bc_count++;
+      bc_count++;
     if((vec_bc_for.size()+vec_bc_rev.size())>1 ){
       multi_bc_count++;
     }
@@ -496,12 +500,6 @@ int main(int argc, char **argv){
       
     print_stats(read_id, vec_bc_for, out_stat_file);
     print_stats(read_id, vec_bc_rev, out_stat_file);
-    
-    string qual_scores="";
-    if(is_fastq){
-      for(int s=0; s<2; s++) getline(*in,qual_scores);
-      getline(*in,read_id_line);
-    }
     
     print_read(read_id+"_+",line,qual_scores,vec_bc_for,out_filename_prefix,
 	       split_file_by_barcode,found_barcodes,remove_barcodes);
