@@ -1,8 +1,3 @@
-- [What does flexiplex do?](#what-does-flexiplex-do)
-- [Installing flexiplex](#installing-flexiplex)
-   - [Usage]
-   - [Examples of use]
-
 # What does flexiplex do?
 
 Flexiplex is a light weight, flexible, error tolerant search and demultiplexing tool. Given a set of reads as either .fastq or .fasta it will demultiplex and/or identify target sequences, reporting matching reads and read-barcode assignment. It has been designed to demultiplex single cell long read RNA-Seq data, but can be used on any read data like an error tolerance "grep". Flexiplex is built with [edlib](https://github.com/Martinsos/edlib). 
@@ -11,9 +6,27 @@ Flexiplex first uses edlib to search for a left and right flanking sequence (pri
 
 If the set of possible barcodes is unknown, flexiplex can be run in discovery mode (by leaving -k option off). In this mode, flexiplex will search for the primer and ployT sequence like usual, and take "b"bp after the primer sequence as a barcode. The frequency that barcodes are found in the data are reported for follow up analysis. For example, if 1000 cells were expected, the top 1000 most frequent barcodes can be used as the known list for a subsequent run of flexiplex.
 
-The primer, ployT, list of barcodes and UMI length and maximum edit distances can all be set through user options (see #Usage).
+The primer, ployT, list of barcodes and UMI length and maximum edit distances can all be set through user options (see [Usage](#usage)).
 
 ![Search sequence structure](/flexiplex/docs/assets/flexplex1.png)
+
+
+- [Installing flexiplex](#installing-flexiplex)
+- [Usage](#usage)
+- [Examples of use](#examples-of-use)
+   - [Assigning single cell reads to 10x 3’ cellular barcodes (when barcodes are known)]
+   - [Assigning single cell reads to 10x cellular barcodes (when barcodes are unknown)]
+   - [Demultiplexing other read data by barcode]
+   - [Assigning genotype to cells]
+   - [Simple search](#simple-search)
+ - [Output](#output)
+    - [New reads file](#new-reads-file)
+    - [Table of barcodes found for each read]
+    - [Table of barcode frequency]
+    - [Table of the number of barcode at each barcode frequency]
+ - [Support or Contact](#support-or-contact)
+
+
 
 # Installing flexiplex
 Clone the [git repository](https://github.com/DavidsonGroup/flexiplex):
@@ -135,7 +148,7 @@ Matching reads will be printed to standard out. Edit distances (-e and -f ) can 
 
 # Output
 
-### New reads file
+## New reads file
 
 Read with a matching barcode will be reported to standard output (or to individual files if the -s true option is provided).
 
@@ -156,7 +169,7 @@ Schematic of default behaviour if multiple barcodes are identified in a read
   - If a flank/barcode is only found in the reverse direction, the read will be reverse complimented.
 
   
-### Table of barcodes found for each read
+## Table of barcodes found for each read
 
 This will be a file called flexiplex_reads_barcodes.txt or <prefix>_reads_barcodes.txt if the -n option was provided.
 It is a tab delimited text file with a row for each barcode identified. e.g.
@@ -168,7 +181,7 @@ SRR12282458.4	CGACTTCAGCTGTCTA	1	0	100
 ```
 The NextBestBarcodeEditDist column is not currently filled.
 
-### Table of barcode frequency
+## Table of barcode frequency
 
 This will be a file called flexiplex_barcodes_counts.txt or <prefix>_reads_barcodes.txt if the -n option was provided. It will only be created if flexiplex is run in barcode discovery mode (no barcode list provided with -k).
  
@@ -191,7 +204,7 @@ head -n <number of cell> flexiplex_barcodes_counts.txt > known_barcodes.txt
 ```
 Then flexiplex run with -k known_barcodes.txt to more accurately assign the barcodes to reads (note that the second column in known_barcodes.txt gets ignored).
   
-### Table of the number of barcode at each barcode frequency
+## Table of the number of barcode at each barcode frequency
 
 This is printed to standard output when no barcodes are provided (ie. flexiplex is in barcode discovery mode and -k not provided).
 e.g. for a small dataset:
@@ -217,4 +230,6 @@ The first line can be interpreted as there was 1 barcode which was found in 15 r
   
 # Support or Contact
 
-To report issues or provide feedback please add a [github issue](https://github.com/DavidsonGroup/flexiplex/issues)
+To report issues, provide feedback or make a request please post a new [github issue](https://github.com/DavidsonGroup/flexiplex/issues). We are keen to hear if you are using flexiplex for a use case not described above or if you have suggestions for predefined settings/options (e.g. bulk sample demultiplexing).
+
+   
