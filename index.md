@@ -114,7 +114,7 @@ flexiplex -r false -p "GTATCGTCAAGGCACTCTTGCCTACGC" -k "CACTAGC,CACCAGC" -T "TCC
 
 Where -k here lists the mutant and wild type variants (reverse complimented), with a few bp either side, and -p and -T are the adjacent sequence left and right of these respectively.
 
-Multiple searches can be strung together. e.g. assign cellular barcodes then search for mutation:
+Multiple searches can be chained together. e.g. assign cellular barcodes then search for a specific mutation:
 ```
 flexiplex -k barcode_list.txt reads.fasta | flexiplex -n barcode_mutation_mapping -r false -p "GTATCGTCAAGGCACTCTTGCCTACGC" -k "CACTAGC,CACCAGC" -T "TCCAACTACCACAAGTTTATATTCAGT" -e 0 -f 15 -b 7 -u 0 reads.fasta > kras_var_reads_with_barcodes.fasta
 ```
