@@ -48,6 +48,12 @@ usage: flexiplex [options] [reads_input]
 <p align="center">
 <img src=https://github.com/Quarkins/SuperTranscript/blob/master/WikiFigs/logo.png height=200 />  
 </p>
+<p align="center">
+<img src=https://github.com/DavidsonGroup/flexiplex/blob/gh-pages/flexplex2.png height=200 /> 
+</p>
+<p align="center">
+<img src=https://github.com/DavidsonGroup/flexiplex/blob/gh-pages/flexplex2.pdf height=200 /> 
+</p>
 
 # Examples of use
 
