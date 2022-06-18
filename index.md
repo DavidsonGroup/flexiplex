@@ -1,3 +1,22 @@
+# Contents
+
+- [What does felxiplex do?](#what-does-felxiplex-do?)
+- [Installing flexiplex](#installing-flexiplex)
+- [Usage](#usage)
+- [Examples of use](#examples-of-use)
+   - [Assigning single cell reads to 10x 3’ cellular barcodes (when barcodes are known)](#assigning-single-cell-reads-to-10x-3’-cellular-barcodes-(when-barcodes-are-known))
+   - [Assigning single cell reads to 10x cellular barcodes (when barcodes are unknown)]
+   - [Demultiplexing other read data by barcode]
+   - [Assigning genotype to cells](#assigning-genotype-to-cells)
+   - [Simple search](#simple-search)
+ - [Output](#output)
+    - [New reads file](#new-reads-file)
+    - [Table of barcodes found for each read](#table-of-barcodes-found-for-each-read)
+    - [Table of barcode frequency](#table-of-barcode-frequency)
+    - [Table of the number of barcode at each barcode frequency](#table-of-the-number-of-barcode-at-each-barcode-frequency)
+ - [Support or Contact](#support-or-contact)
+
+
 # What does flexiplex do?
 
 Flexiplex is a light weight, flexible, error tolerant search and demultiplexing tool. Given a set of reads as either .fastq or .fasta it will demultiplex and/or identify target sequences, reporting matching reads and read-barcode assignment. It has been designed to demultiplex single cell long read RNA-Seq data, but can be used on any read data like an error tolerance "grep". Flexiplex is built with [edlib](https://github.com/Martinsos/edlib). 
@@ -9,23 +28,6 @@ If the set of possible barcodes is unknown, flexiplex can be run in discovery mo
 The primer, ployT, list of barcodes and UMI length and maximum edit distances can all be set through user options (see [Usage](#usage)).
 
 ![Search sequence structure](/flexiplex/docs/assets/flexplex1.png)
-
-
-- [Installing flexiplex](#installing-flexiplex)
-- [Usage](#usage)
-- [Examples of use](#examples-of-use)
-   - [Assigning single cell reads to 10x 3’ cellular barcodes (when barcodes are known)]
-   - [Assigning single cell reads to 10x cellular barcodes (when barcodes are unknown)]
-   - [Demultiplexing other read data by barcode]
-   - [Assigning genotype to cells]
-   - [Simple search](#simple-search)
- - [Output](#output)
-    - [New reads file](#new-reads-file)
-    - [Table of barcodes found for each read]
-    - [Table of barcode frequency]
-    - [Table of the number of barcode at each barcode frequency]
- - [Support or Contact](#support-or-contact)
-
 
 
 # Installing flexiplex
