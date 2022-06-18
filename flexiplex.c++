@@ -272,7 +272,6 @@ int main(int argc, char **argv){
 
   cerr << "FLEXIPLEX " << VERSION << endl;
 
-  
   //Variables to store user options
   //Set these to their defaults
   int expected_cells=0; //(d)
@@ -325,8 +324,15 @@ int main(int argc, char **argv){
 	file.close();
       }
       cerr << "Number of known barcodes: " << known_barcodes.size() << endl;
+      if(known_barcodes.size()==0){
+	print_usage; exit(1); //case barcode file is empty
+      }
+      //set barcode length automatically from known barcodes..
+      int bl=known_barcodes[0].length();
+      search_patterns.temp_barcode=string(bl,'?');
+      cerr << "Setting barcode length automatically to " << bl << endl;
       params+=2;
-      break;
+      break;     
     }
     case 'r':{
       remove_barcodes=get_bool_opt_arg(optarg);
