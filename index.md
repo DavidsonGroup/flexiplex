@@ -4,9 +4,9 @@
 - [Installing flexiplex](#installing-flexiplex)
 - [Usage](#usage)
 - [Examples of use](#examples-of-use)
-   - [Assigning single cell reads to 10x 3’ cellular barcodes (when barcodes are known)](#assigning-single-cell-reads-to-10x-3’-cellular-barcodes-(when-barcodes-are-known))
-   - [Assigning single cell reads to 10x cellular barcodes (when barcodes are unknown)]
-   - [Demultiplexing other read data by barcode]
+   - [Assigning single cell reads to 10x 3’ cellular barcodes (when barcodes are known)](#assigning-single-cell-reads-to-10x-3-cellular-barcodes-when-barcodes-are-known)
+   - [Assigning single cell reads to 10x 3' cellular barcodes (when barcodes are unknown)](#assigning-single-cell-reads-to-10x-3-cellular-barcodes-when-barcodes-are-unknown)
+   - [Demultiplexing other read data by barcode](#demultiplexing-other-read-data-by-barcode)
    - [Assigning genotype to cells](#assigning-genotype-to-cells)
    - [Simple search](#simple-search)
  - [Output](#output)
@@ -90,7 +90,7 @@ If dealing with large gzipped files you can pipe reads into flexiples. e.g.
 gunzip -c read.fastq.gz | flexiplex -k barcode_list.txt | gzip > new_reads.fastq.gz
 ```
   
-## Assigning single cell reads to 10x cellular barcodes (when barcodes are unknown)
+## Assigning single cell reads to 10x 3' cellular barcodes (when barcodes are unknown)
 
 Flexiplex can be run in two passes: 1) to find the barcode sequences and 2) assign them to reads.
 To find barcodes, set the flanking edit distance to 0 (a perfect match) as these are less likely to have errors in the barcodes.
