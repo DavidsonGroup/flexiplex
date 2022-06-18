@@ -1,20 +1,20 @@
 # Contents
 
-[What does felxiplex do?](#what-does-flexiplex-do)
-[Installing flexiplex](#installing-flexiplex)
-[Usage](#usage)
-[Examples of use](#examples-of-use)
- - [Assigning single cell reads to 10x 3’ cellular barcodes (when barcodes are known)](#assigning-single-cell-reads-to-10x-3-cellular-barcodes-when-barcodes-are-known)
- - [Assigning single cell reads to 10x 3' cellular barcodes (when barcodes are unknown)](#assigning-single-cell-reads-to-10x-3-cellular-barcodes-when-barcodes-are-unknown)
- - [Demultiplexing other read data by barcode](#demultiplexing-other-read-data-by-barcode)
- - [Assigning genotype to cells](#assigning-genotype-to-cells)
- - [Simple search](#simple-search)
-[Output](#output)
-  - [New reads file](#new-reads-file)
-  - [Table of barcodes found for each read](#table-of-barcodes-found-for-each-read)
-  - [Table of barcode frequency](#table-of-barcode-frequency)
-  - [Table of the number of barcode at each barcode frequency](#table-of-the-number-of-barcode-at-each-barcode-frequency)
-[Support or Contact](#support-or-contact)
+- [What does felxiplex do?](#what-does-flexiplex-do)
+- [Installing flexiplex](#installing-flexiplex)
+- [Usage](#usage)
+- [Examples of use](#examples-of-use)
+   - [Assigning single cell reads to 10x 3’ cellular barcodes (when barcodes are known)](#assigning-single-cell-reads-to-10x-3-cellular-barcodes-when-barcodes-are-known)
+   - [Assigning single cell reads to 10x 3' cellular barcodes (when barcodes are unknown)](#assigning-single-cell-reads-to-10x-3-cellular-barcodes-when-barcodes-are-unknown)
+   - [Demultiplexing other read data by barcode](#demultiplexing-other-read-data-by-barcode)
+   - [Assigning genotype to cells](#assigning-genotype-to-cells)
+   - [Simple search](#simple-search)
+- [Output](#output)
+    - [New reads file](#new-reads-file)
+    - [Table of barcodes found for each read](#table-of-barcodes-found-for-each-read)
+    - [Table of barcode frequency](#table-of-barcode-frequency)
+    - [Table of the number of barcode at each barcode frequency](#table-of-the-number-of-barcode-at-each-barcode-frequency)
+- [Support or Contact](#support-or-contact)
 
 
 # What does flexiplex do?
@@ -44,7 +44,9 @@ cd flexiplex ; make
 You should now have a binary file called flexiplex which you can execute. Alternatively, there are precompiled binaries in the /bin subdirectory for linux and mac, which can be used if compilation fails.
 
 To see usage information, run 
-```./flexiplex -h```
+```
+./flexiplex -h
+```
 
 
 # Usage
