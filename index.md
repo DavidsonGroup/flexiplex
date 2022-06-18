@@ -1,24 +1,19 @@
 # Contents
 
 [What does felxiplex do?](#what-does-flexiplex-do)
-
 [Installing flexiplex](#installing-flexiplex)
-
 [Usage](#usage)
-
 [Examples of use](#examples-of-use)
  - [Assigning single cell reads to 10x 3’ cellular barcodes (when barcodes are known)](#assigning-single-cell-reads-to-10x-3-cellular-barcodes-when-barcodes-are-known)
  - [Assigning single cell reads to 10x 3' cellular barcodes (when barcodes are unknown)](#assigning-single-cell-reads-to-10x-3-cellular-barcodes-when-barcodes-are-unknown)
  - [Demultiplexing other read data by barcode](#demultiplexing-other-read-data-by-barcode)
  - [Assigning genotype to cells](#assigning-genotype-to-cells)
  - [Simple search](#simple-search)
-
 [Output](#output)
   - [New reads file](#new-reads-file)
   - [Table of barcodes found for each read](#table-of-barcodes-found-for-each-read)
   - [Table of barcode frequency](#table-of-barcode-frequency)
   - [Table of the number of barcode at each barcode frequency](#table-of-the-number-of-barcode-at-each-barcode-frequency)
-
 [Support or Contact](#support-or-contact)
 
 
@@ -26,7 +21,7 @@
 
 Flexiplex is a light weight, flexible, error tolerant search and demultiplexing tool. Given a set of reads as either .fastq or .fasta it will demultiplex and/or identify target sequences, reporting matching reads and read-barcode assignment. It has been designed to demultiplex single cell long read RNA-Seq data, but can be used on any read data like an error tolerance "grep". Flexiplex is built with [edlib](https://github.com/Martinsos/edlib). 
 
-Flexiplex first uses edlib to search for a left and right flanking sequence (primer and polyT) within each read (with barcode and UMI sequence left as a wildcard). For the best match with an edit distance of "f" or less it will trim to the barcode + UMI sequence +/- 5 bp either side, and search for the barcode against a known list. The best matching barcode with an edit distance of "e" or less will be reported. To identify second or more barcodes within a read, flexiplex repeats the search again with previously found primer to ployT sequence masked out. 
+Flexiplex first uses edlib to search for a left and right flanking sequence (primer and polyT) within each read (with barcode and UMI sequence left as a wildcard). For the best match with an edit distance of "f" or less it will trim to the barcode + UMI sequence +/- 5 bp either side, and search for the barcode against a known list. The best matching barcode with an edit distance of "e" or less will be reported. Occassionally reads are chimeric, meaning two or more molecules get sequence togther in the same read. To identify these cases, and chop reads, flexiplex will repeat the search again with the previously found primer to ployT sequence masked out. This is repeated until no new barcodes are found in the read.
 
 If the set of possible barcodes is unknown, flexiplex can be run in discovery mode (by leaving -k option off). In this mode, flexiplex will search for the primer and ployT sequence like usual, and take "b"bp after the primer sequence as a barcode. The frequency that barcodes are found in the data are reported for follow up analysis. For example, if 1000 cells were expected, the top 1000 most frequent barcodes can be used as the known list for a subsequent run of flexiplex.
 
@@ -46,7 +41,8 @@ Change into the source directory and compile:
 cd flexiplex ; make
 ```
 
-You should now have a binary file called flexiplex which you can execute.
+You should now have a binary file called flexiplex which you can execute. Alternatively, there are precompiled binaries in the /bin subdirectory for linux and mac, which can be used if compilation fails.
+
 To see usage information, run 
 ```./flexiplex -h```
 
@@ -90,7 +86,7 @@ Or for older chemistry with 10bp UMIs use:
 flexiplex -u 10 -k barcode_list.txt reads.fastq > new_reads.fastq
 ```
 
-If dealing with large gzipped files you can pipe reads into flexiplex. e.g.
+If dealing with large gzipped files you can pipe reads into flexiplex to avoid unzipping. e.g.
 ```
 gunzip -c read.fastq.gz | flexiplex -k barcode_list.txt | gzip > new_reads.fastq.gz
 ```
@@ -119,14 +115,14 @@ flexiplex -k my_barcode_list.txt reads.fastq > new_reads.fastq
 
 To demultiplex with other flanking and barcodes sequences, set these 
 ```
-flexiplex -p <left flank> -k "<barcode1>,<barcode2>" -T <right flank> -b <barcode length> -u 0 reads.fastq > new_reads.fastq
+flexiplex -p <left flank> -k "<barcode1>,<barcode2>" -T <right flank> -u 0 reads.fastq > new_reads.fastq
 ```
 
 This assumes no UMI sequence is present. -e and -f which are the maximum barcode and flanking sequence edit distances may also need to be adjusted. As a guide we use -e 2 for 16bp barcodes and -f 12 for 32bp (left+right) flanking sequence.
 
 If barcodes are expected at the start and end of reads, force flexiplex not to chop reads when mutiple barcodes are seen (-r false). Reads can also be separated into different files by barcodes (-s true).
 ```
-flexiplex -r false -s true -p <left flank> -k "<barcode1>,<barcode2>" -T <right flank> -b <barcode length> -u 0
+flexiplex -r false -s true -p <left flank> -k "<barcode1>,<barcode2>" -T <right flank> -u 0
 ```
 
 ## Assigning genotype to cells
@@ -134,21 +130,21 @@ flexiplex -r false -s true -p <left flank> -k "<barcode1>,<barcode2>" -T <right 
 This is similar to [Demultiplexing other read data by barcode], but different alleles can be used in place of barcodes. e.g. to search for the KRAS variant c.34G>A run:
 
 ```
-flexiplex -r false -p "GTATCGTCAAGGCACTCTTGCCTACGC" -k "CACTAGC,CACCAGC" -T "TCCAACTACCACAAGTTTATATTCAGT" -e 0 -f 15 -b 7 -u 0 reads.fasta > kras_var_reads.fasta
+flexiplex -r false -p "GTATCGTCAAGGCACTCTTGCCTACGC" -k "CACTAGC,CACCAGC" -T "TCCAACTACCACAAGTTTATATTCAGT" -e 0 -f 15 -u 0 reads.fasta > kras_var_reads.fasta
 ```
 
 Where -k here lists the mutant and wild type variants (reverse complimented), with a few bp either side, and -p and -T are the adjacent sequence left and right of these respectively.
 
 Multiple searches can be chained together. e.g. assign cellular barcodes then search for a specific mutation:
 ```
-flexiplex -k barcode_list.txt reads.fasta | flexiplex -n barcode_mutation_mapping -r false -p "GTATCGTCAAGGCACTCTTGCCTACGC" -k "CACTAGC,CACCAGC" -T "TCCAACTACCACAAGTTTATATTCAGT" -e 0 -f 15 -b 7 -u 0 reads.fasta > kras_var_reads_with_barcodes.fasta
+flexiplex -k barcode_list.txt reads.fasta | flexiplex -n barcode_mutation_mapping -r false -p "GTATCGTCAAGGCACTCTTGCCTACGC" -k "CACTAGC,CACCAGC" -T "TCCAACTACCACAAGTTTATATTCAGT" -e 0 -f 15 -u 0 reads.fasta > kras_var_reads_with_barcodes.fasta
 ```
 
 ## Simple search
 
-To perform a simple error tolerant grep-like search of a single sequence, split the sequence between the -p and -k (or -k and -T) options:
+To perform a simple error tolerant grep-like search of a single sequence, split the sequence between the -p and -k (or -k and -T) options. e.g.:
 ```
-flexiplex -r false -p "CACTCTTGCCTACGC" -k "CACTAGC" -f 3 -e 0 -b 7 reads.fasta
+flexiplex -r false -p "CACTCTTGCCTACGC" -k "CACTAGC" -f 3 -e 0 reads.fasta
 ```
 
 Matching reads will be printed to standard out. Edit distances (-e and -f ) can be adjusted as required.
