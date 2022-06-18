@@ -1,3 +1,8 @@
+   - [What does flexiplex do?]
+   - [Installing flexiplex]
+   - [Usage]
+   - [Examples of use]
+
 # What does flexiplex do?
 
 Flexiplex is a light weight, flexible, error tolerant search and demultiplexing tool. Given a set of reads as either .fastq or .fasta it will demultiplex and/or identify target sequences, reporting matching reads and read-barcode assignment. It has been designed to demultiplex single cell long read RNA-Seq data, but can be used on any read data like an error tolerance "grep". Flexiplex is built with [edlib](https://github.com/Martinsos/edlib). 
