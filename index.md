@@ -1,5 +1,5 @@
-   - [What does flexiplex do?]
-   - [Installing flexiplex]
+- [What does flexiplex do?](#what-does-flexiplex-do)
+- [Installing flexiplex](#installing-flexiplex)
    - [Usage]
    - [Examples of use]
 
