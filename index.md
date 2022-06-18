@@ -45,6 +45,10 @@ usage: flexiplex [options] [reads_input]
 
 ![search sequence structure](/flexiplex/flexplex1.png)
 
+<p align="center">
+<img src=https://github.com/Quarkins/SuperTranscript/blob/master/WikiFigs/logo.png height=200 />  
+</p>
+
 # Examples of use
 
 ## Assigning single cell reads to 10x 3' cellular barcodes (when barcodes are known)
