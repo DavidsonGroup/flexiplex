@@ -85,7 +85,7 @@ Or for older chemistry with 10bp UMIs use:
 flexiplex -u 10 -k barcode_list.txt reads.fastq > new_reads.fastq
 ```
 
-If dealing with large gzipped files you can pipe reads into flexiples. e.g.
+If dealing with large gzipped files you can pipe reads into flexiplex. e.g.
 ```
 gunzip -c read.fastq.gz | flexiplex -k barcode_list.txt | gzip > new_reads.fastq.gz
 ```
@@ -141,7 +141,7 @@ flexiplex -k barcode_list.txt reads.fasta | flexiplex -n barcode_mutation_mappin
 
 ## Simple search
 
-To perform a simple error tolerant grep-like search of a single sequence, split the sequence between the -p and -k (or -k and -T options):
+To perform a simple error tolerant grep-like search of a single sequence, split the sequence between the -p and -k (or -k and -T) options:
 ```
 flexiplex -r false -p "CACTCTTGCCTACGC" -k "CACTAGC" -f 3 -e 0 -b 7 reads.fasta
 ```
