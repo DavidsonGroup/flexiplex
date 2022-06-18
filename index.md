@@ -9,9 +9,13 @@ If the set of possible barcodes is unknown, flexiplex can be run in discovery mo
 The primer, ployT, list of barcodes and UMI length and maximum edit distances can all be set through user options (see #Usage).
 
 <p align="center">
-<img src=https://github.com/DavidsonGroup/flexiplex/blob/gh-pages/flexplex1.png height=400 /> 
+<img src=https://github.com/DavidsonGroup/flexiplex/blob/gh-pages/docs/assets/flexplex1.png height=400 /> 
 </p>
-![Search sequence structure](https://github.com/DavidsonGroup/flexiplex/blob/gh-pages/flexplex1.png)
+![Search sequence structure 1](/flexiplex/docs/assets/flexplex1.png)
+![Search sequence structure 2](/flexiplex/assets/flexplex1.png)
+![Search sequence structure 3](/docs/assets/flexplex1.png)
+![Search sequence structure 4](/assets/flexplex1.png)
+
 
 # Installing flexiplex
 Clone the [git repository](https://github.com/DavidsonGroup/flexiplex):
