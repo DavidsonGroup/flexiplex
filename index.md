@@ -1,6 +1,6 @@
 # Contents
 
-- [What does felxiplex do?](#what-does-felxiplex-do?)
+- [What does felxiplex do?](#what-does-felxiplex-do)
 - [Installing flexiplex](#installing-flexiplex)
 - [Usage](#usage)
 - [Examples of use](#examples-of-use)
