@@ -2,6 +2,15 @@
 
 Flexiplex is a light weight, flexible, error tolerant search and demultiplexing tool. Given a set of reads as either .fastq or .fasta it will demultiplex and/or identify target sequences, reporting matching reads and read-barcode assignment. It has been designed to demultiplex single cell long read RNA-Seq data, but can be used on any read data like an error tolerance "grep". Flexiplex is built with [edlib](https://github.com/Martinsos/edlib). 
 
+Flexiplex first uses edlib to search for a left and right flanking sequence (primer and polyT) within each read (with barcode and UMI sequence left as a wildcard). For the best match with an edit distance of "f" or less it will trim to the barcode + UMI sequence +/- 5 bp either side, and search for the barcode against a known list. The best matching barcode with an edit distance of "e" or less will be reported. To identify second or more barcodes within a read, flexiplex repeats the search again with previously found primer to ployT sequence masked out. 
+
+If the set of possible barcodes is unknown, flexiplex can be run in discovery mode (by leaving -k option off). In this mode, flexiplex will search for the primer and ployT sequence like usual, and take "b"bp after the primer sequence as a barcode. The frequency that barcodes are found in the data are reported for follow up analysis. For example, if 1000 cells were expected, the top 1000 most frequent barcodes can be used as the known list for a subsequent run of flexiplex.
+
+The primer, ployT, list of barcodes and UMI length and maximum edit distances can all be set through user options (see #Usage).
+
+<p align="center">
+<img src=https://github.com/DavidsonGroup/flexiplex/blob/gh-pages/flexplex1.png height=200 /> 
+</p>
 
 # Installing flexiplex
 Clone the [git repository](https://github.com/DavidsonGroup/flexiplex):
@@ -17,6 +26,7 @@ cd flexiplex ; make
 You should now have a binary file called flexiplex which you can execute.
 To see usage information, run 
 ```./flexiplex -h```
+
 
 # Usage
 
@@ -42,18 +52,6 @@ usage: flexiplex [options] [reads_input]
      -f N   Maximum edit distance to primer+ployT (default 10).
      -h     Print this usage information.
 ```
-
-![search sequence structure](/flexiplex/flexplex1.png)
-
-<p align="center">
-<img src=https://github.com/Quarkins/SuperTranscript/blob/master/WikiFigs/logo.png height=200 />  
-</p>
-<p align="center">
-<img src=https://github.com/DavidsonGroup/flexiplex/blob/gh-pages/flexplex2.png height=200 /> 
-</p>
-<p align="center">
-<img src=https://github.com/DavidsonGroup/flexiplex/blob/gh-pages/flexplex2.pdf height=200 /> 
-</p>
 
 # Examples of use
 
@@ -144,9 +142,11 @@ If read chopping and ID replacement is used (-r true, default):
   - If multiple barcodes are found in the same direction the read is split at the position of the second or subsequent primer, and multiple reads reported.
   - The primer+barcode+umi+polyT sequence is removed from the read.
 If barcodes are found in both the forward and reverse directions on a read, the same read would be reported multiple time (once forward and once reverse). To overcome this duplication, data can be mapped as stranded
-  
-![Reads reported when multi-barcodes found (default behaviour)](/flexiplex/flexiplex2.png)  
-  
+ 
+<p align="center">
+<img src=https://github.com/DavidsonGroup/flexiplex/blob/gh-pages/flexplex2.png height=300 /> 
+</p>
+Schematic of default behaviour if multiple barcodes are identified in a read
   
  If read chopping and ID replacement is not used (-r false):
   - Any read with matching flank and barcode sequence will be reported with read ID appended with _<+/-> as above.
