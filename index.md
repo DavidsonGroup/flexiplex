@@ -8,14 +8,7 @@ If the set of possible barcodes is unknown, flexiplex can be run in discovery mo
 
 The primer, ployT, list of barcodes and UMI length and maximum edit distances can all be set through user options (see #Usage).
 
-<p align="center">
-<img src=https://github.com/DavidsonGroup/flexiplex/blob/gh-pages/docs/assets/flexplex1.png height=400 /> 
-</p>
-![Search sequence structure 1](/flexiplex/docs/assets/flexplex1.png)
-![Search sequence structure 2](/flexiplex/assets/flexplex1.png)
-![Search sequence structure 3](/docs/assets/flexplex1.png)
-![Search sequence structure 4](/assets/flexplex1.png)
-
+![Search sequence structure](/flexiplex/docs/assets/flexplex1.png)
 
 # Installing flexiplex
 Clone the [git repository](https://github.com/DavidsonGroup/flexiplex):
@@ -147,11 +140,10 @@ If read chopping and ID replacement is used (-r true, default):
   - If multiple barcodes are found in the same direction the read is split at the position of the second or subsequent primer, and multiple reads reported.
   - The primer+barcode+umi+polyT sequence is removed from the read.
 If barcodes are found in both the forward and reverse directions on a read, the same read would be reported multiple time (once forward and once reverse). To overcome this duplication, data can be mapped as stranded
- 
-<p align="center">
-<img src=https://github.com/DavidsonGroup/flexiplex/blob/gh-pages/flexplex2.png height=300 /> 
-</p>
+
+![Reads chopping](/flexiplex/docs/assets/flexplex2.png)
 Schematic of default behaviour if multiple barcodes are identified in a read
+
   
  If read chopping and ID replacement is not used (-r false):
   - Any read with matching flank and barcode sequence will be reported with read ID appended with _<+/-> as above.
