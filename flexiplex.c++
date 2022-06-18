@@ -325,10 +325,11 @@ int main(int argc, char **argv){
       }
       cerr << "Number of known barcodes: " << known_barcodes.size() << endl;
       if(known_barcodes.size()==0){
-	print_usage; exit(1); //case barcode file is empty
+	print_usage();
+	exit(1); //case barcode file is empty
       }
       //set barcode length automatically from known barcodes..
-      int bl=known_barcodes[0].length();
+      int bl=(known_barcodes.begin())->length();
       search_patterns.temp_barcode=string(bl,'?');
       cerr << "Setting barcode length automatically to " << bl << endl;
       params+=2;
