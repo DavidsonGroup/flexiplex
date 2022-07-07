@@ -474,7 +474,7 @@ int main(int argc, char **argv){
     
     r_count++; //progress counter
     if(r_count % 100000 == 0)
-      cerr << r_count/1000 << " thousand reads processed.." << endl;
+      cerr << r_count/((double) 1000000 ) << " million reads processed.." << endl;
     
     //forward search
     vector<Barcode> vec_bc_for=big_barcode_search(line,known_barcodes,
