@@ -116,16 +116,16 @@ flexiplex -k my_barcode_list.txt reads.fastq > new_reads.fastq
 
 ## Demultiplexing other read data by barcode
 
-To demultiplex with other flanking and barcodes sequences, set these 
+To demultiplex with other flanking and barcodes sequences, set these e.g.:
 ```
-flexiplex -p <left flank> -k "<barcode1>,<barcode2>" -T <right flank> -u 0 reads.fastq > new_reads.fastq
+flexiplex -p <left flank> -k "<barcode1>,<barcode2>,<barcode3>,..." -T <right flank> -u 0 reads.fastq > new_reads.fastq
 ```
 
 This assumes no UMI sequence is present. -e and -f which are the maximum barcode and flanking sequence edit distances may also need to be adjusted. As a guide we use -e 2 for 16bp barcodes and -f 12 for 32bp (left+right) flanking sequence.
 
-If barcodes are expected at the start and end of reads, force flexiplex not to chop reads when mutiple barcodes are seen (-r false). Reads can also be separated into different files by barcodes (-s true).
+If barcodes are expected at the start and end of reads, force flexiplex not to chop reads when mutiple barcodes are seen (-r false). Reads can be separated into different files by barcodes (-s true).
 ```
-flexiplex -r false -s true -p <left flank> -k "<barcode1>,<barcode2>" -T <right flank> -u 0
+flexiplex -r false -s true -p <left flank> -k "<barcode1>,<barcode2>,<barcode3>,..." -T <right flank> -u 0
 ```
 
 ## Assigning genotype to cells
