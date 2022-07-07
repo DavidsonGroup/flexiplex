@@ -9,7 +9,7 @@
    - [Demultiplexing other read data by barcode](#demultiplexing-other-read-data-by-barcode)
    - [Assigning genotype to cells](#assigning-genotype-to-cells)
    - [Simple search](#simple-search)
-   - [Extracting UMIs from PCR-cDNA ONT data](#extracting-umis-from-pcrcdna-ont-data)
+   - [Extracting UMIs from PCR-cDNA ONT data](#extracting-umis-from-pcr-cdna-ont-data)
 - [Output](#output)
     - [New reads file](#new-reads-file)
     - [Table of barcodes found for each read](#table-of-barcodes-found-for-each-read)
