@@ -195,7 +195,7 @@ void print_stats(string read_id, vector<Barcode> & vec_bc, ostream & out_stream)
 	       << vec_bc.at(b).barcode << "\t"
 	       << vec_bc.at(b).flank_editd << "\t"
 	       << vec_bc.at(b).editd << "\t"
-	       << vec_bc.at(b).next_editd << "\t"
+	       << vec_bc.at(b).umi << "\t"
 	       << endl;
   }
 }
@@ -442,7 +442,7 @@ int main(int argc, char **argv){
 
   if(known_barcodes.size()>0){
     out_stat_file.open(out_stat_filename);
-    out_stat_file << "Read\tCellBarcode\tFlankEditDist\tBarcodeEditDist\tNextBestBarcodeEditDist"<<endl;
+    out_stat_file << "Read\tCellBarcode\tFlankEditDist\tBarcodeEditDist\tUMI"<<endl;
   }
   cerr << "Searching for barcodes..." << endl;
   bool is_fastq=true;
