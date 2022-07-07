@@ -9,6 +9,7 @@
    - [Demultiplexing other read data by barcode](#demultiplexing-other-read-data-by-barcode)
    - [Assigning genotype to cells](#assigning-genotype-to-cells)
    - [Simple search](#simple-search)
+   - [Extracting UMIs from PCR-cDNA ONT data](#extracting-umis-from-pcrcdna-ont-data)
 - [Output](#output)
     - [New reads file](#new-reads-file)
     - [Table of barcodes found for each read](#table-of-barcodes-found-for-each-read)
@@ -151,6 +152,15 @@ flexiplex -r false -p "CACTCTTGCCTACGC" -k "CACTAGC" -f 3 -e 0 reads.fasta
 
 Matching reads will be printed to standard out. Edit distances (-e and -f ) can be adjusted as required.
 
+## Extracting UMIs from PCR-cDNA ONT data
+
+Recent library prepration kits for ONT PCR amplified cDNA attach unique molecular identifiers (UMIs) to the 5' end of transcripts. These can be used for deduplication in downstream data analysis. The UMI sequence for each read can be extracted using flexiplex:
+```
+flexiplex -p TTGGTGCTGATATT -k "GCTTT" -T TTTGGGG -u 22 -f 3 -e 1 reads.fastq
+```
+The UMIs will be added to the read ID in the output .fastq file and flexiplex_reads_barcodes.txt will contain a list of identified UMIs. Note that the barcode sequence here, GCTTT comes from the left flanking sequence is needed as a placeholder. The example above comes from data we have tested on and may need to be adjusted for different library preparation kits.
+
+
 # Output
 
 ## New reads file
@@ -179,12 +189,15 @@ Schematic of default behaviour if multiple barcodes are identified in a read
 This will be a file called flexiplex_reads_barcodes.txt or <prefix>_reads_barcodes.txt if the -n option was provided.
 It is a tab delimited text file with a row for each barcode identified. e.g.
 ```
-Read	CellBarcode	FlankEditDist	BarcodeEditDist	NextBestBarcodeEditDist
-SRR12282458.3	CTCAGAAGTTTGCATG	4	0	100
-SRR12282458.4	CGACTTCAGCTGTCTA	1	0	100
+Read	CellBarcode	FlankEditDist	BarcodeEditDist	UMI
+SRR12282458.3	CTCAGAAGTTTGCATG	5	0	TTCTTAGCGA
+SRR12282458.4	CGACTTCAGCTGTCTA	1	0	ACCGCATCCG
+SRR12282458.6	GTAGGCCCAAGGCTCC	0	0	ATTATATCCT
+SRR12282458.8	TCTCATATCACTCCTG	2	1	GAGCCCTGGG
+SRR12282458.9	GTAGTCATCGTTTATC	1	0	TGCTGTATAG
+SRR12282458.10	TGACTTTGTATAATGG	1	0	CCCTAATATT
 ...
 ```
-The NextBestBarcodeEditDist column is not currently filled.
 
 ## Table of barcode frequency
 
