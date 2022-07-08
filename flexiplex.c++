@@ -74,12 +74,11 @@ struct SearchSeq {
   string temp_barcode;
 } ;
 
-//Holds the found barcode and assocaited information 
+//Holds the found barcode and associated information 
 struct Barcode {
   string barcode;
   string umi;
   int editd;
-  int next_editd;
   int flank_editd;
   int flank_start;
   int flank_end;
@@ -97,17 +96,15 @@ Barcode get_barcode(string & seq,
   
   //initialise struct variables for return:
   Barcode barcode;
-  barcode.editd=100; barcode.next_editd=100; barcode.flank_editd=100;
+  barcode.editd=100; barcode.flank_editd=100;
 
   //initialise edlib configuration
   EdlibEqualityPair additionalEqualities[5] = {{'?','A'},{'?','C'},{'?','G'},{'?','T'},{'?','N'}};
-  EdlibAlignConfig edlibConf = {flank_max_editd, EDLIB_MODE_HW, EDLIB_TASK_PATH, additionalEqualities, 5};
-  string search_string; 
-  EdlibAlignResult result; 
+  EdlibAlignConfig edlibConf = {flank_max_editd, EDLIB_MODE_HW, EDLIB_TASK_LOC, additionalEqualities, 5};
 
   //search for primer and ployT (barcode and umi as wildcards)
-  search_string=ss.primer+ss.temp_barcode+ss.umi_seq+ss.polyA;
-  result = edlibAlign(search_string.c_str(), search_string.length(), seq.c_str(), seq.length(), edlibConf);
+  string search_string=ss.primer+ss.temp_barcode+ss.umi_seq+ss.polyA;
+  EdlibAlignResult result = edlibAlign(search_string.c_str(), search_string.length(), seq.c_str(), seq.length(), edlibConf);
   if(result.status != EDLIB_STATUS_OK | result.numLocations==0 ){
     edlibFreeAlignResult(result);
     return(barcode); // no match found - return
@@ -134,7 +131,6 @@ Barcode get_barcode(string & seq,
     search_string=(*known_barcodes_itr);
     result = edlibAlign(search_string.c_str(), search_string.length(), barcode_seq.c_str(), barcode_seq.length(),edlibConf);
     if(result.status == EDLIB_STATUS_OK && result.numLocations!=0 && (result.editDistance < barcode.editd)) {
-      barcode.next_editd=barcode.editd; //if this barcode has the lowest edit distance update best match..
       barcode.editd=result.editDistance;
       barcode.barcode=*known_barcodes_itr;
       barcode.umi=seq.substr(BC_START+result.endLocations[0]+1,ss.umi_seq.length()); //get the umi
@@ -478,14 +474,14 @@ int main(int argc, char **argv){
     
     //forward search
     vector<Barcode> vec_bc_for=big_barcode_search(line,known_barcodes,
-						  flank_edit_distance,edit_distance,search_patterns);
+    						  flank_edit_distance,edit_distance,search_patterns);
     for(int b=0; b<vec_bc_for.size(); b++)
       barcode_counts[vec_bc_for.at(b).barcode]++;
     string rev_line=line;
     reverse_compliment(rev_line);
     //Check the reverse compliment of the read
     vector<Barcode> vec_bc_rev=big_barcode_search(rev_line,known_barcodes,
-						  flank_edit_distance,edit_distance,search_patterns);
+    						  flank_edit_distance,edit_distance,search_patterns);
     for(int b=0; b<vec_bc_rev.size(); b++)
       barcode_counts[vec_bc_rev.at(b).barcode]++;
     
