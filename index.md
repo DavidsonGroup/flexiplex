@@ -131,7 +131,7 @@ flexiplex -r false -s true -p <left flank> -k "<barcode1>,<barcode2>,<barcode3>,
 
 ## Assigning genotype to cells - long reads
 
-This is similar to [Demultiplexing other read data by barcode], but different alleles can be used in place of barcodes. e.g. to search for the KRAS variant c.34G>A run:
+This is similar to [Demultiplexing other read data by barcode](#demultiplexing-other-read-data-by-barcode), but different alleles can be used in place of barcodes. e.g. to search for the KRAS variant c.34G>A run:
 
 ```
 flexiplex -r false -p "GTATCGTCAAGGCACTCTTGCCTACGC" -k "CACTAGC,CACCAGC" -T "TCCAACTACCACAAGTTTATATTCAGT" -e 0 -f 15 -u 0 reads.fasta > kras_var_reads.fasta
