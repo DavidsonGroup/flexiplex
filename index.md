@@ -7,7 +7,8 @@
    - [Assigning single cell reads to 10x 3’ cellular barcodes (when barcodes are known)](#assigning-single-cell-reads-to-10x-3-cellular-barcodes-when-barcodes-are-known)
    - [Assigning single cell reads to 10x 3' cellular barcodes (when barcodes are unknown)](#assigning-single-cell-reads-to-10x-3-cellular-barcodes-when-barcodes-are-unknown)
    - [Demultiplexing other read data by barcode](#demultiplexing-other-read-data-by-barcode)
-   - [Assigning genotype to cells](#assigning-genotype-to-cells)
+   - [Assigning genotype to cells - long reads](#assigning-genotype-to-cells-long-reads)
+   - [Assigning genotype to cells - short reads](#assigning-genotype-to-cells-short-reads)
    - [Simple search](#simple-search)
    - [Extracting UMIs from PCR-cDNA ONT data](#extracting-umis-from-pcr-cdna-ont-data)
 - [Output](#output)
@@ -128,7 +129,7 @@ If barcodes are expected at the start and end of reads, force flexiplex not to c
 flexiplex -r false -s true -p <left flank> -k "<barcode1>,<barcode2>,<barcode3>,..." -T <right flank> -u 0
 ```
 
-## Assigning genotype to cells
+## Assigning genotype to cells - long reads
 
 This is similar to [Demultiplexing other read data by barcode], but different alleles can be used in place of barcodes. e.g. to search for the KRAS variant c.34G>A run:
 
@@ -141,6 +142,20 @@ Where -k here lists the mutant and wild type variants (reverse complimented), wi
 Multiple searches can be chained together. e.g. assign cellular barcodes then search for a specific mutation:
 ```
 flexiplex -k barcode_list.txt reads.fasta | flexiplex -n barcode_mutation_mapping -r false -p "GTATCGTCAAGGCACTCTTGCCTACGC" -k "CACTAGC,CACCAGC" -T "TCCAACTACCACAAGTTTATATTCAGT" -e 0 -f 15 -u 0 reads.fasta > kras_var_reads_with_barcodes.fasta
+```
+
+## Assigning genotype to cells - short reads
+
+Flexiplex can be also be used on 10x short read data to search for cells with a specific target sequence such as a mutation or fusion of interest from the raw read data. This is achieved by "pasting" the two read ends together and running in a similar way as you would for long reads. e.g. To search for an NPM1 variant common in AML cancers, c.863_864insTCTG, on 10x 3' data: 
+
+``` 
+paste -d "&" Sample_R1.fastq Sample_R2.fastq | flexiplex -p <left seq> -k "TCTG" -T <right seq> -u 0 -r false | flexiplex -p "" -T "&"
+```
+
+In this example we assume no sequencing errors in the barcodes as the data is Illumina, however a barcode list could also be provided (to the final command) to error correct. The order of demuliplexing and searching can also be switched. e.g.:
+
+``` 
+paste -d "&" Sample_R1.fastq Sample_R2.fastq | flexiplex -p "" -T "&" [-k barcodes_list.txt] | flexiplex -p <left seq> -k "TCTG" -T <right seq> -u 0 -r false 
 ```
 
 ## Simple search
