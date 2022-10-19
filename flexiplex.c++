@@ -14,14 +14,13 @@
 #include <unistd.h>
 #include <vector>
 #include <algorithm>
+#include <thread>
 
 #include "edlib.h"
 
-//#include <gperftools/profiler.h>
-
 using namespace std;
 
-const static string VERSION="0.9";
+const static string VERSION="0.95";
 
 // the help information which is printed when a user puts in the wrong
 // combination of command line options.
@@ -43,7 +42,7 @@ void print_usage(){
   cerr << "     -b N   Barcode length (default: 16)." << endl;
   cerr << "     -u N   UMI length (default: 12)." << endl;
   cerr << "     -e N   Maximum edit distance to barcode (default 2)." << endl;
-  cerr << "     -f N   Maximum edit distance to primer+ployT (default 10)." << endl;
+  cerr << "     -f N   Maximum edit distance to primer+ployT (default 8)." << endl;
   cerr << "     -h     Print this usage information." << endl;
   cerr << endl;
 }
@@ -72,7 +71,7 @@ struct SearchSeq {
   string polyA;
   string umi_seq;
   string temp_barcode;
-} ;
+} search_pattern ;
 
 //Holds the found barcode and associated information 
 struct Barcode {
@@ -85,25 +84,77 @@ struct Barcode {
 } ;
 
 
+// Code for fast edit distance calculation for short sequences modified from
+// https://en.wikibooks.org/wiki/Algorithm_Implementation/Strings/Levenshtein_distance#C++
+// s2 is always assumned to be the shorter string (barcode)
+unsigned int edit_distance(const std::string& s1, const std::string& s2, unsigned int &end, int max_editd){
+  
+  std::size_t len1 = s1.size()+1, len2 = s2.size()+1;
+  const char * s1_c = s1.c_str(); const char * s2_c = s2.c_str();
+
+  vector< unsigned int> dist_holder(len1*len2);
+  //initialise the edit distance matrix.
+  //penalise for gaps at the start and end of the shorter sequence (j)
+  //but not for shifting the start/end of the longer sequence (i,0)
+  dist_holder[0]=0; //[0][0]
+  for(unsigned int j = 1; j < len2; ++j) dist_holder[j] = j; //[0][j];
+  for(unsigned int i = 1; i < len1; ++i) dist_holder[i*len2] = 0; //[i][0];
+    
+  int best=len2;
+  end=len1-1;
+
+  //loop over the distance matrix elements and calculate running distance
+  for(unsigned int j = 1; j < len2; ++j){
+    bool any_below_threshold=false; //flag used for early exit
+    for(unsigned int i = 1; i < len1; ++i){
+      int sub=(s1_c[i - 1] == s2_c[j - 1]) ? 0 : 1 ; //are the bases the same?
+      if(sub==0) //if yes, no need to incremet distance
+	dist_holder[i*len2+j]=dist_holder[(i-1)*len2+(j-1)];
+      else //otherwise add insertion,deletion or substituation 
+	dist_holder[i*len2+j] = std::min({ //j+i*len2  //set[i][j]
+	    dist_holder[(i-1)*len2+j] + 1, //[i-1][j]
+	    dist_holder[i*len2+(j-1)] + 1, //[i][j-1]
+	    dist_holder[(i-1)*len2+(j-1)] + 1}); // ((s1_c[i - 1] == s2_c[j - 1]) ? 0 : 1) });
+      if(dist_holder[i*len2+j] <= max_editd) any_below_threshold=true;
+      if(j==(len2-1) && dist_holder[i*len2+j]<best){ //if this is the last row in j
+	best=dist_holder[i*len2+j];                  //check if this is the best running score
+	end=i;                                       //update the end position of alignment
+      }
+    }
+    if(!any_below_threshold){ //early exit to save time.
+      return(100);
+    }
+  }
+  return best; //return edit distance
+}
+
+
 //Given a string 'seq' search for substring with primer and polyT sequence followed by
 //a targeted search in the region for barcode
 //Seaquence seearch is performed using edlib
+
 Barcode get_barcode(string & seq,
 		    unordered_set<string> *known_barcodes,
 		    int flank_max_editd,
-		    int barcode_max_editd,
-		    SearchSeq & ss){
+		    int barcode_max_editd){//,
+  //		    SearchSeq & ss){
   
+  const int OFFSET=5; //wiggle room in bases of the expected barcode start site to search.
+
   //initialise struct variables for return:
   Barcode barcode;
   barcode.editd=100; barcode.flank_editd=100;
 
   //initialise edlib configuration
   EdlibEqualityPair additionalEqualities[5] = {{'?','A'},{'?','C'},{'?','G'},{'?','T'},{'?','N'}};
-  EdlibAlignConfig edlibConf = {flank_max_editd, EDLIB_MODE_HW, EDLIB_TASK_LOC, additionalEqualities, 5};
+  EdlibAlignConfig edlibConf = {flank_max_editd, EDLIB_MODE_HW, EDLIB_TASK_PATH, additionalEqualities, 5};
 
   //search for primer and ployT (barcode and umi as wildcards)
-  string search_string=ss.primer+ss.temp_barcode+ss.umi_seq+ss.polyA;
+  string search_string=
+    search_pattern.primer+
+    search_pattern.temp_barcode+
+    search_pattern.umi_seq+
+    search_pattern.polyA;
   EdlibAlignResult result = edlibAlign(search_string.c_str(), search_string.length(), seq.c_str(), seq.length(), edlibConf);
   if(result.status != EDLIB_STATUS_OK | result.numLocations==0 ){
     edlibFreeAlignResult(result);
@@ -112,46 +163,62 @@ Barcode get_barcode(string & seq,
   barcode.flank_editd=result.editDistance;
   barcode.flank_start=result.startLocations[0];
   barcode.flank_end=result.endLocations[0];
+  edlibFreeAlignResult(result);
   
-  if(known_barcodes->size()==0){ //if not checking against known list return sequence after the primer
-    barcode.barcode=seq.substr(result.startLocations[0]+ss.primer.size(),ss.temp_barcode.length());
+  //now we need to work out where the start of the barcode sequence is to extract it and match
+  int primer_length_in_seq=search_pattern.primer.size(); //set the start of the barcode as primer length from start of primer
+  if(search_pattern.primer!=""){ //search for the primer to refine (deal with indel errors)
+    string search_region=seq.substr(barcode.flank_start,search_pattern.primer.length()+OFFSET);
+    EdlibAlignResult result_targeted = edlibAlign(
+						  search_pattern.primer.c_str(),
+						  search_pattern.primer.length(),
+						  search_region.c_str(),
+						  search_region.length(), edlibConf);
+    if(result_targeted.status == EDLIB_STATUS_OK && result_targeted.numLocations > 0 ){
+      primer_length_in_seq=result_targeted.endLocations[0]+1; //new barcode starting point
+    }
+    edlibFreeAlignResult(result_targeted);
+  }
+  
+  //if not checking against known list of barcodes, return sequence after the primer
+  //also check for a perfect match straight up as this will save computer later.
+  int BC_start=barcode.flank_start+primer_length_in_seq;
+  string exact_bc=seq.substr(BC_start,search_pattern.temp_barcode.length());
+  if(known_barcodes->size()==0 || (known_barcodes->find(exact_bc) != known_barcodes->end())){ 
+    barcode.barcode=exact_bc;
     barcode.editd=0;
-    edlibFreeAlignResult(result);
+    barcode.umi=seq.substr(BC_start+search_pattern.temp_barcode.length(),search_pattern.umi_seq.length());//resul
     return(barcode);
   }
-
-  //otherwise, check again a list of known barcodes
-  int OFFSET=5; //include this many bases extra to the left and right incase of indels errors
-  int BC_START=result.startLocations[0]+ss.primer.length()-OFFSET;
-  string barcode_seq=seq.substr(BC_START,ss.temp_barcode.length()+2*OFFSET);
-  //reconfigure edlib for the targetted search
-  edlibConf = edlibNewAlignConfig(barcode_max_editd,EDLIB_MODE_HW,EDLIB_TASK_LOC,NULL,0);
+  
+  // otherwise widen our search space and the look for matches with errors
+  string barcode_seq=seq.substr(BC_start-OFFSET,search_pattern.temp_barcode.length()+2*OFFSET);
+  
+  //iterate over all the known barcodes, checking each sequentially
   unordered_set<string>::iterator known_barcodes_itr=known_barcodes->begin();
+  unsigned int editDistance; unsigned int endDistance;
   for(; known_barcodes_itr!=known_barcodes->end(); known_barcodes_itr++){
-    search_string=(*known_barcodes_itr);
-    result = edlibAlign(search_string.c_str(), search_string.length(), barcode_seq.c_str(), barcode_seq.length(),edlibConf);
-    if(result.status == EDLIB_STATUS_OK && result.numLocations!=0 && (result.editDistance < barcode.editd)) {
-      barcode.editd=result.editDistance;
+    search_string=(*known_barcodes_itr); //known barcode to check again
+    editDistance = edit_distance(barcode_seq,search_string,endDistance,barcode_max_editd);
+    if(editDistance < barcode.editd && editDistance <= barcode_max_editd){ //if best so far, update
+      barcode.editd=editDistance; 
       barcode.barcode=*known_barcodes_itr;
-      barcode.umi=seq.substr(BC_START+result.endLocations[0]+1,ss.umi_seq.length()); //get the umi
-      if(barcode.editd==0){ //perfect match, stop looking and return
-	edlibFreeAlignResult(result);
-	return(barcode); 
+      barcode.umi=seq.substr(BC_start-OFFSET+endDistance,search_pattern.umi_seq.length());//assumes no error in UMI seq.
+      if(editDistance==0){ //if perfect match is found we're done.
+	return(barcode);
       }
     }
   }
-  
-  edlibFreeAlignResult(result);
   return(barcode); //return the best matched barcode and associated information
 }
 
 //search a read for one or more barcodes (parent function that calls get_barcode)
 vector<Barcode> big_barcode_search(string & sequence, unordered_set<string> & known_barcodes,
-				   int max_flank_editd, int max_editd, SearchSeq & ss){
+				   int max_flank_editd, int max_editd){ //, SearchSeq & ss){
   vector<Barcode> return_vec; //vector of all the barcodes found
 
   //search for barcode
-  Barcode result=get_barcode(sequence,&known_barcodes,max_flank_editd,max_editd,ss);
+  Barcode result=get_barcode(sequence,&known_barcodes,max_flank_editd,max_editd); //,ss);
   if(result.editd<=max_editd) //add to return vector if edit distance small enough
     return_vec.push_back(result);
   
@@ -163,7 +230,7 @@ vector<Barcode> big_barcode_search(string & sequence, unordered_set<string> & kn
       masked_sequence.replace(return_vec.at(i).flank_start,flank_length,string(flank_length,'X'));
     } //recursively call this function until no more barcodes are found
     vector<Barcode> masked_res;
-    masked_res=big_barcode_search(masked_sequence,known_barcodes,max_flank_editd,max_editd,ss);
+    masked_res=big_barcode_search(masked_sequence,known_barcodes,max_flank_editd,max_editd); //,ss);
     return_vec.insert(return_vec.end(),masked_res.begin(),masked_res.end()); //add to result
   }
     
@@ -272,7 +339,7 @@ int main(int argc, char **argv){
   //Set these to their defaults
   int expected_cells=0; //(d)
   int edit_distance=2; //(e)
-  int flank_edit_distance=10; //(f)
+  int flank_edit_distance=8; //(f)
 
   //set the output filenames
   string out_stat_filename="reads_barcodes.txt";
@@ -282,11 +349,10 @@ int main(int argc, char **argv){
   bool split_file_by_barcode=false; //(s)
   bool remove_barcodes=true; //(r)
   
-  SearchSeq search_patterns;
-  search_patterns.primer = "CTACACGACGCTCTTCCGATCT"; //(p)
-  search_patterns.polyA = string(9,'T'); //(T)
-  search_patterns.umi_seq = string(12,'?'); //(length u)
-  search_patterns.temp_barcode = string(16,'?'); //(length b)
+  search_pattern.primer = "CTACACGACGCTCTTCCGATCT"; //(p)
+  search_pattern.polyA = string(9,'T'); //(T)
+  search_pattern.umi_seq = string(12,'?'); //(length u)
+  search_pattern.temp_barcode = string(16,'?'); //(length b)
   
   //Set of known barcodes 
   unordered_set<string> known_barcodes;
@@ -326,7 +392,7 @@ int main(int argc, char **argv){
       }
       //set barcode length automatically from known barcodes..
       int bl=(known_barcodes.begin())->length();
-      search_patterns.temp_barcode=string(bl,'?');
+      search_pattern.temp_barcode=string(bl,'?');
       cerr << "Setting barcode length automatically to " << bl << endl;
       params+=2;
       break;     
@@ -350,27 +416,27 @@ int main(int argc, char **argv){
       break;
     }
     case 'p':{
-      search_patterns.primer=optarg;
-      cerr << "Setting primer to search for: " << search_patterns.primer << endl;
+      search_pattern.primer=optarg;
+      cerr << "Setting primer to search for: " << search_pattern.primer << endl;
       params+=2;
       break;
     }
     case 'T':{
-      search_patterns.polyA=optarg;
-      cerr << "Setting polyT to search for: " << search_patterns.polyA << endl;
+      search_pattern.polyA=optarg;
+      cerr << "Setting polyT to search for: " << search_pattern.polyA << endl;
       params+=2;
       break;
     }
     case 'u':{
       int ul=atoi(optarg);
-      search_patterns.umi_seq=string(ul,'?');
+      search_pattern.umi_seq=string(ul,'?');
       cerr << "Setting UMI length to " << ul << endl;
       params+=2;
       break;
     }
     case 'b':{
       int bl=atoi(optarg);
-      search_patterns.temp_barcode=string(bl,'?');
+      search_pattern.temp_barcode=string(bl,'?');
       cerr << "Setting barcode length to " << bl << endl;
       params+=2;
       break;
@@ -423,8 +489,6 @@ int main(int argc, char **argv){
     in=&file;
   }
     
-  //  ProfilerStart("my.prof");
-  
   /********* FIND BARCODE IN READS ********/
   string sequence;
   int bc_count=0;
@@ -451,6 +515,7 @@ int main(int argc, char **argv){
       cerr << "Unknown read format... exiting" << endl; exit(1);
     }
   }
+
   while ( getline (*in,line) ){
     string read_id;
     istringstream line_stream(read_id_line);
@@ -474,14 +539,14 @@ int main(int argc, char **argv){
     
     //forward search
     vector<Barcode> vec_bc_for=big_barcode_search(line,known_barcodes,
-    						  flank_edit_distance,edit_distance,search_patterns);
+    						  flank_edit_distance,edit_distance);//,search_patterns);
     for(int b=0; b<vec_bc_for.size(); b++)
       barcode_counts[vec_bc_for.at(b).barcode]++;
     string rev_line=line;
     reverse_compliment(rev_line);
     //Check the reverse compliment of the read
     vector<Barcode> vec_bc_rev=big_barcode_search(rev_line,known_barcodes,
-    						  flank_edit_distance,edit_distance,search_patterns);
+    						  flank_edit_distance,edit_distance);//,search_patterns);
     for(int b=0; b<vec_bc_rev.size(); b++)
       barcode_counts[vec_bc_rev.at(b).barcode]++;
     
