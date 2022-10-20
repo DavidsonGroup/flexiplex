@@ -4,8 +4,8 @@
 - [Installing flexiplex](#installing-flexiplex)
 - [Usage](#usage)
 - [Examples of use](#examples-of-use)
-   - [Assigning single cell reads to 10x 3’ cellular barcodes (when barcodes are known)](#assigning-single-cell-reads-to-10x-3-cellular-barcodes-when-barcodes-are-known)
-   - [Assigning single cell reads to 10x 3' cellular barcodes (when barcodes are unknown)](#assigning-single-cell-reads-to-10x-3-cellular-barcodes-when-barcodes-are-unknown)
+   - [Assigning single cell long reads to 10x 3’ cellular barcodes (when barcodes are known)](#assigning-single-cell-long-reads-to-10x-3-cellular-barcodes-when-barcodes-are-known)
+   - [Assigning single cell long reads to 10x 3' cellular barcodes (when barcodes are unknown)](#assigning-single-cell-long-reads-to-10x-3-cellular-barcodes-when-barcodes-are-unknown)
    - [Demultiplexing other read data by barcode](#demultiplexing-other-read-data-by-barcode)
    - [Assigning genotype to cells - long reads](#assigning-genotype-to-cells---long-reads)
    - [Assigning genotype to cells - short reads](#assigning-genotype-to-cells---short-reads)
@@ -16,6 +16,7 @@
     - [Table of barcodes found for each read](#table-of-barcodes-found-for-each-read)
     - [Table of barcode frequency](#table-of-barcode-frequency)
     - [Table of the number of barcode at each barcode frequency](#table-of-the-number-of-barcode-at-each-barcode-frequency)
+- [Tips to speed up flexiplex](#tips-to-speed-up-flexiplex)
 - [Support or Contact](#support-or-contact)
 
 
@@ -54,7 +55,7 @@ To see usage information, run
 # Usage
 
 ```
-FLEXIPLEX 0.9
+FLEXIPLEX 0.95
 usage: flexiplex [options] [reads_input]
   reads_input: a .fastq or .fasta file. Will read from stdin if empty.
   options:
@@ -72,13 +73,13 @@ usage: flexiplex [options] [reads_input]
      -b N   Barcode length (default: 16).
      -u N   UMI length (default: 12).
      -e N   Maximum edit distance to barcode (default 2).
-     -f N   Maximum edit distance to primer+ployT (default 10).
+     -f N   Maximum edit distance to primer+ployT (default 8).
      -h     Print this usage information.
 ```
 
 # Examples of use
 
-## Assigning single cell reads to 10x 3' cellular barcodes (when barcodes are known)
+## Assigning single cell long reads to 10x 3' cellular barcodes (when barcodes are known)
   
 The default settings work for 10x 3' v3 chemistry. To demultiplex run:
 ```
@@ -95,7 +96,7 @@ If dealing with large gzipped files you can pipe reads into flexiplex to avoid u
 gunzip -c read.fastq.gz | flexiplex -k barcode_list.txt | gzip > new_reads.fastq.gz
 ```
   
-## Assigning single cell reads to 10x 3' cellular barcodes (when barcodes are unknown)
+## Assigning single cell long reads to 10x 3' cellular barcodes (when barcodes are unknown)
 
 Flexiplex can be run in two passes: 1) to find the barcode sequences and 2) assign them to reads.
 To find barcodes, set the flanking edit distance to 0 (a perfect match) as these are less likely to have errors in the barcodes.
@@ -110,9 +111,15 @@ Once the approximate number of cells is know, subset the list of barcodes by thi
 head -n <number of cells> flexiplex_barcodes_counts.txt > my_barcode_list.txt
 ```
 
+Optional: You may also want to filter this list by [the possible 10x barcodes](https://kb.10xgenomics.com/hc/en-us/articles/115004506263-What-is-a-barcode-whitelist-). An example of how to do this is given below:
+
+```
+sort <(gunzip -c 3M-febrary-2018.txt.gz) <(cut -f1 my_barcode_list.txt) | uniq -d > my_filtered_barcode_list.txt
+```
+
 Then use this list to assign barcodes to reads:
 ```
-flexiplex -k my_barcode_list.txt reads.fastq > new_reads.fastq
+flexiplex -k my_filtered_barcode_list.txt reads.fastq > new_reads.fastq
 ```
 
 ## Demultiplexing other read data by barcode
@@ -127,6 +134,11 @@ This assumes no UMI sequence is present. -e and -f which are the maximum barcode
 If barcodes are expected at the start and end of reads, force flexiplex not to chop reads when mutiple barcodes are seen (-r false). Reads can be separated into different files by barcodes (-s true).
 ```
 flexiplex -r false -s true -p <left flank> -k "<barcode1>,<barcode2>,<barcode3>,..." -T <right flank> -u 0
+```
+flexiplex expects a left flanking sequence, so if barcodes are a fixed number of bases at the very start of a read you can add sequence to the beginnning to anchor the search. e.g.:
+
+```
+cat file.fastq | sed 's/^/START/g' | sed 's/START@/@/g' | flexiplex -p "START" -T "" -u 0 -f 0 -k my_barcode_list.txt
 ```
 
 ## Assigning genotype to cells - long reads
@@ -260,7 +272,14 @@ Reads	Barcodes
 1	1867
 ```
 The first line can be interpreted as there was 1 barcode which was found in 15 reads etc. This data is provided to help work out how many cells were sequenced (e.g. by creating a knee plot).
-  
+
+# Tips to speed up flexiplex
+
+Flexiplex can be slow if checking against a large number of barcodes (>1000) in noisy reads. Below are a few ideas you can try to speed up barcode demulpiplexing:
+  1. Run flexiplex in barcode [discovery mode](#assigning-single-cell-long-reads-to-10x-3-cellular-barcodes-when-barcodes-are-unknown), then intersect the found barcodes with the known list to reduce the search space.
+  2. Flexiplex is not currently multi-threaded, but you can achieve parallel excecution manuualy by splitting the .fasta or .fastq into several smaller files and running flexiplex on each in parallel. The split linux command can help split files up.
+  3. Reduce the tolerated edit distance of the flanking and barcode sequence (-f and -e flags)
+   
 # Support or Contact
 
 To report issues, provide feedback or make a request please post a new [github issue](https://github.com/DavidsonGroup/flexiplex/issues). We are keen to hear if you are using flexiplex for a use case not described above or if you have suggestions for predefined settings/options (e.g. bulk sample demultiplexing).
