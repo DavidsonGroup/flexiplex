@@ -135,6 +135,7 @@ If barcodes are expected at the start and end of reads, force flexiplex not to c
 ```
 flexiplex -r false -s true -p <left flank> -k "<barcode1>,<barcode2>,<barcode3>,..." -T <right flank> -u 0
 ```
+
 flexiplex expects a left flanking sequence, so if barcodes are a fixed number of bases at the very start of a read you can add sequence to the beginnning to anchor the search. e.g.:
 
 ```
@@ -275,9 +276,9 @@ The first line can be interpreted as there was 1 barcode which was found in 15 r
 
 # Tips to speed up flexiplex
 
-Flexiplex can be slow if checking against a large number of barcodes (>1000) in noisy reads. Below are a few ideas you can try to speed up barcode demulpiplexing:
+Flexiplex can be slow if checking against a large number of barcodes (>1000) in noisy reads. Below are a few ideas you can try to speed up barcode demultiplexing:
   1. Run flexiplex in barcode [discovery mode](#assigning-single-cell-long-reads-to-10x-3-cellular-barcodes-when-barcodes-are-unknown), then intersect the found barcodes with the known list to reduce the search space.
-  2. Flexiplex is not currently multi-threaded, but you can achieve parallel excecution manuualy by splitting the .fasta or .fastq into several smaller files and running flexiplex on each in parallel. The split linux command can help split files up.
+  2. Flexiplex is not currently multi-threaded, but you can achieve parallel excecution manually by splitting the .fasta or .fastq into several smaller files and running flexiplex on each in parallel. The split linux command can help split files up.
   3. Reduce the tolerated edit distance of the flanking and barcode sequence (-f and -e flags)
    
 # Support or Contact
