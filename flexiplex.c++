@@ -29,7 +29,7 @@ void print_usage(){
   cerr << "  reads_input: a .fastq or .fasta file. Will read from stdin if empty." << endl;
   cerr << "  options: " << endl;
   cerr << "     -k known_list   Either 1) a text file of expected barcodes in the first column," << endl; 
-  cerr << "                     one row per barcode, or 2) acomma separate string of barcodes. " << endl;
+  cerr << "                     one row per barcode, or 2) a comma separate string of barcodes. " << endl;
   cerr << "                     Without this option, flexiplex will search and report possible barcodes." << endl;
   cerr << "                     The generated list can be used for known_list in subsequent runs." << endl; 
   cerr << "     -r true/false   Replace read ID with barcodes+UMI, remove search strings" << endl;
@@ -42,7 +42,7 @@ void print_usage(){
   cerr << "     -b N   Barcode length (default: 16)." << endl;
   cerr << "     -u N   UMI length (default: 12)." << endl;
   cerr << "     -e N   Maximum edit distance to barcode (default 2)." << endl;
-  cerr << "     -f N   Maximum edit distance to primer+ployT (default 8)." << endl;
+  cerr << "     -f N   Maximum edit distance to primer+polyT (default 8)." << endl;
   cerr << "     -h     Print this usage information." << endl;
   cerr << endl;
 }
