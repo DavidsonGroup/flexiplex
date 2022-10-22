@@ -28,7 +28,7 @@ Flexiplex first uses edlib to search for a left and right flanking sequence (pri
 
 If the set of possible barcodes is unknown, flexiplex can be run in discovery mode (by leaving -k option off). In this mode, flexiplex will search for the primer and ployT sequence like usual, and take "b"bp after the primer sequence as a barcode. The frequency that barcodes are found in the data are reported for follow up analysis. For example, if 1000 cells were expected, the top 1000 most frequent barcodes can be used as the known list for a subsequent run of flexiplex.
 
-The primer, ployT, list of barcodes and UMI length and maximum edit distances can all be set through user options (see [Usage](#usage)).
+The primer, polyT, list of barcodes and UMI length and maximum edit distances can all be set through user options (see [Usage](#usage)).
 
 ![Search sequence structure](/flexiplex/docs/assets/flexplex1.png)
 
@@ -60,7 +60,7 @@ usage: flexiplex [options] [reads_input]
   reads_input: a .fastq or .fasta file. Will read from stdin if empty.
   options:
      -k known_list   Either 1) a text file of expected barcodes in the first column,
-                     one row per barcode, or 2) acomma separate string of barcodes.
+                     one row per barcode, or 2) a comma separate string of barcodes.
                      Without this option, flexiplex will search and report possible barcodes.
                      The generated list can be used for known_list in subsequent runs.
      -r true/false   Replace read ID with barcodes+UMI, remove search strings
@@ -73,7 +73,7 @@ usage: flexiplex [options] [reads_input]
      -b N   Barcode length (default: 16).
      -u N   UMI length (default: 12).
      -e N   Maximum edit distance to barcode (default 2).
-     -f N   Maximum edit distance to primer+ployT (default 8).
+     -f N   Maximum edit distance to primer+polyT (default 8).
      -h     Print this usage information.
 ```
 
