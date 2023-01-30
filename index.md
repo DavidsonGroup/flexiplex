@@ -55,7 +55,8 @@ To see usage information, run
 # Usage
 
 ```
-FLEXIPLEX 0.95
+FLEXIPLEX 0.96
+
 usage: flexiplex [options] [reads_input]
   reads_input: a .fastq or .fasta file. Will read from stdin if empty.
   options:
@@ -63,17 +64,18 @@ usage: flexiplex [options] [reads_input]
                      one row per barcode, or 2) a comma separate string of barcodes.
                      Without this option, flexiplex will search and report possible barcodes.
                      The generated list can be used for known_list in subsequent runs.
-     -r true/false   Replace read ID with barcodes+UMI, remove search strings
+     -i true/false   Replace read ID with barcodes+UMI, remove search strings
                      including flanking sequenence and split read if multiple
                      barcodes found (default: true).
      -s true/false   Sort reads into separate files by barcode (default: false)
-     -p primer   Left flank sequence to search for (default: CTACACGACGCTCTTCCGATCT).
-     -T polyT    Right flank sequence to search for (default: TTTTTTTTT).
+     -l left     Left flank sequence to search for (default: CTACACGACGCTCTTCCGATCT).
+     -r right    Right flank sequence to search for (default: TTTTTTTTT).
      -n prefix   Prefix for output filenames.
      -b N   Barcode length (default: 16).
      -u N   UMI length (default: 12).
      -e N   Maximum edit distance to barcode (default 2).
      -f N   Maximum edit distance to primer+polyT (default 8).
+     -p N   Number of threads (default: 1).
      -h     Print this usage information.
 ```
 
