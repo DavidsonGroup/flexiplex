@@ -20,7 +20,7 @@
 
 using namespace std;
 
-const static string VERSION="0.95";
+const static string VERSION="0.96";
 
 // the help information which is printed when a user puts in the wrong
 // combination of command line options.
@@ -32,17 +32,18 @@ void print_usage(){
   cerr << "                     one row per barcode, or 2) a comma separate string of barcodes. " << endl;
   cerr << "                     Without this option, flexiplex will search and report possible barcodes." << endl;
   cerr << "                     The generated list can be used for known_list in subsequent runs." << endl; 
-  cerr << "     -r true/false   Replace read ID with barcodes+UMI, remove search strings" << endl;
+  cerr << "     -i true/false   Replace read ID with barcodes+UMI, remove search strings" << endl;
   cerr << "                     including flanking sequenence and split read if multiple" << endl;
   cerr << "                     barcodes found (default: true)." << endl;
   cerr << "     -s true/false   Sort reads into separate files by barcode (default: false)" << endl;
-  cerr << "     -p primer   Left flank sequence to search for (default: CTACACGACGCTCTTCCGATCT)." << endl;
-  cerr << "     -T polyT    Right flank sequence to search for (default: TTTTTTTTT)." << endl;
+  cerr << "     -l left     Left flank sequence to search for (default: CTACACGACGCTCTTCCGATCT)." << endl;
+  cerr << "     -r right    Right flank sequence to search for (default: TTTTTTTTT)." << endl;
   cerr << "     -n prefix   Prefix for output filenames." << endl;
   cerr << "     -b N   Barcode length (default: 16)." << endl;
   cerr << "     -u N   UMI length (default: 12)." << endl;
   cerr << "     -e N   Maximum edit distance to barcode (default 2)." << endl;
   cerr << "     -f N   Maximum edit distance to primer+polyT (default 8)." << endl;
+  cerr << "     -p N   Number of threads (default: 1)." << endl;
   cerr << "     -h     Print this usage information." << endl;
   cerr << endl;
 }
@@ -83,6 +84,14 @@ struct Barcode {
   int flank_end;
 } ;
 
+struct SearchResult {
+  string read_id;
+  string qual_scores;
+  string line;
+  string rev_line;
+  vector<Barcode> vec_bc_for;
+  vector<Barcode> vec_bc_rev;
+};
 
 // Code for fast edit distance calculation for short sequences modified from
 // https://en.wikibooks.org/wiki/Algorithm_Implementation/Strings/Levenshtein_distance#C++
@@ -329,6 +338,26 @@ void print_read(string read_id,string read, string qual,
   }
 }
 
+// separated out from main so that this can be run with threads
+void search_read(vector<SearchResult> & reads, unordered_set<string> & known_barcodes,
+			 int flank_edit_distance, int edit_distance){
+  
+  for(int r=0; r<reads.size(); r++){
+    
+    //forward search
+    reads[r].vec_bc_for=big_barcode_search(reads[r].line,
+					   known_barcodes,
+					   flank_edit_distance,
+					   edit_distance);
+    reads[r].rev_line=reads[r].line;
+    reverse_compliment(reads[r].rev_line);
+    //Check the reverse compliment of the read
+    reads[r].vec_bc_rev=big_barcode_search(reads[r].rev_line,
+					   known_barcodes,
+					   flank_edit_distance,
+					   edit_distance);
+  }
+}
 
 // MAIN is here!!
 int main(int argc, char **argv){
@@ -358,13 +387,16 @@ int main(int argc, char **argv){
   unordered_set<string> known_barcodes;
   unordered_set<string> found_barcodes;
 
+  // threads
+  int n_threads=1;
+  
   /*** Pass command line option *****/
   int c;
   int params=1;
   ifstream file;
   string line;
 
-  while((c =  getopt(argc, argv, "k:r:p:T:b:u:e:f:n:s:h")) != EOF){
+  while((c =  getopt(argc, argv, "k:i:l:r:b:u:e:f:n:s:h:p:")) != EOF){
     switch(c){
     case 'k': { //k=list of known barcodes
       string file_name(optarg);
@@ -397,7 +429,7 @@ int main(int argc, char **argv){
       params+=2;
       break;     
     }
-    case 'r':{
+    case 'i':{
       remove_barcodes=get_bool_opt_arg(optarg);
       cerr << "Setting read IDs to be replaced: "<< remove_barcodes << endl;
       params+=2;
@@ -415,13 +447,13 @@ int main(int argc, char **argv){
       params+=2;
       break;
     }
-    case 'p':{
+    case 'l':{
       search_pattern.primer=optarg;
       cerr << "Setting primer to search for: " << search_pattern.primer << endl;
       params+=2;
       break;
     }
-    case 'T':{
+    case 'r':{
       search_pattern.polyA=optarg;
       cerr << "Setting polyT to search for: " << search_pattern.polyA << endl;
       params+=2;
@@ -463,13 +495,19 @@ int main(int argc, char **argv){
       params+=2;
       break;
     }
+    case 'p':{
+      n_threads=atoi(optarg);
+      cerr << "Setting number of threads to "<< n_threads << endl;
+      params+=2;
+      break;
+    }
     case '?': //other unknown options
       cerr << "Unknown option.. stopping" << endl;
       print_usage();
       exit(1);
     }
   }
-
+  
   cerr << "For usage information type: flexiplex -h" << endl;
   
   istream * in;
@@ -517,57 +555,74 @@ int main(int argc, char **argv){
   }
 
   while ( getline (*in,line) ){
-    string read_id;
-    istringstream line_stream(read_id_line);
-    line_stream >> read_id;
-    read_id.erase(0,1);
-    
-    string qual_scores="";
-    if(!is_fastq){ //fastq (account for multi-lines per read)
-      string buffer; 
-      while(getline(*in,buffer) && buffer[0]!='>')
-	line+=buffer;
-      read_id_line=buffer;
-    } else { //fastq (get quality scores)
-      for(int s=0; s<2; s++) getline(*in,qual_scores);
-      getline(*in,read_id_line);
-    }
-    
-    r_count++; //progress counter
-    if(r_count % 100000 == 0)
-      cerr << r_count/((double) 1000000 ) << " million reads processed.." << endl;
-    
-    //forward search
-    vector<Barcode> vec_bc_for=big_barcode_search(line,known_barcodes,
-    						  flank_edit_distance,edit_distance);//,search_patterns);
-    for(int b=0; b<vec_bc_for.size(); b++)
-      barcode_counts[vec_bc_for.at(b).barcode]++;
-    string rev_line=line;
-    reverse_compliment(rev_line);
-    //Check the reverse compliment of the read
-    vector<Barcode> vec_bc_rev=big_barcode_search(rev_line,known_barcodes,
-    						  flank_edit_distance,edit_distance);//,search_patterns);
-    for(int b=0; b<vec_bc_rev.size(); b++)
-      barcode_counts[vec_bc_rev.at(b).barcode]++;
-    
-    if((vec_bc_for.size()+vec_bc_rev.size())>0)
-      bc_count++;
-    if((vec_bc_for.size()+vec_bc_rev.size())>1 ){
-      multi_bc_count++;
-    }
-    
-    if(known_barcodes.size()==0)
-      continue; // if we are just looking for all possible barcodes don't output reads etc.
+    int buffer = 5000; //number of reads to pass to one thread.
+    vector<vector<SearchResult>> sr_v(n_threads);
+    vector<thread> threads(n_threads);
+    for(int t=0; t < n_threads*buffer; t++){ //get n_threads*buffer number or reads..
+      string read_id;
+      istringstream line_stream(read_id_line);
+      line_stream >> read_id;
+      read_id.erase(0,1);
       
-    print_stats(read_id, vec_bc_for, out_stat_file);
-    print_stats(read_id, vec_bc_rev, out_stat_file);
-    
-    print_read(read_id+"_+",line,qual_scores,vec_bc_for,out_filename_prefix,
-	       split_file_by_barcode,found_barcodes,remove_barcodes);
-    reverse(qual_scores.begin(),qual_scores.end());
-    if(remove_barcodes || vec_bc_for.size()==0) //case we just want to print read once if multiple bc found.
-      print_read(read_id+"_-",rev_line,qual_scores,vec_bc_rev,out_filename_prefix,
-		 split_file_by_barcode,found_barcodes,remove_barcodes);
+      string qual_scores="";
+      if(!is_fastq){ //fastq (account for multi-lines per read)
+	string buffer; 
+	while(getline(*in,buffer) && buffer[0]!='>')
+	  line+=buffer;
+	read_id_line=buffer;
+      } else { //fastq (get quality scores)
+	for(int s=0; s<2; s++) getline(*in,qual_scores);
+	getline(*in,read_id_line);
+      }
+      
+      r_count++; //progress counter
+      if(r_count % 100000 == 0)
+	cerr << r_count/((double) 1000000 ) << " million reads processed.." << endl;
+
+      SearchResult sr;
+      sr.read_id=read_id;
+      sr.line=line;
+      sr.qual_scores=qual_scores;
+      sr_v[t / buffer].push_back(sr);
+
+      //this is quite ugly, must be a better way to do this..
+      if(t<(n_threads*buffer-1) && !getline(*in,line)) break; //advance the line
+    }
+
+    for(int t=0; t < n_threads & t < sr_v.size(); t++){ // assign the reads to each thread
+      threads[t]=std::thread(search_read,ref(sr_v[t]),ref(known_barcodes),flank_edit_distance,edit_distance);
+    }
+
+    for(int t=0; t < sr_v.size(); t++){ //loop over the threads and print out ther results
+
+      threads[t].join(); // wait for the threads to finish before printing
+      for(int r=0; r< sr_v[t].size(); r++){ // loop over the reads
+	
+	for(int b=0; b<sr_v[t][r].vec_bc_for.size(); b++)
+	  barcode_counts[sr_v[t][r].vec_bc_for.at(b).barcode]++;
+	for(int b=0; b<sr_v[t][r].vec_bc_rev.size(); b++)
+	  barcode_counts[sr_v[t][r].vec_bc_rev.at(b).barcode]++;
+	
+	if((sr_v[t][r].vec_bc_for.size()+sr_v[t][r].vec_bc_rev.size())>0)
+	  bc_count++;
+	if((sr_v[t][r].vec_bc_for.size()+sr_v[t][r].vec_bc_rev.size())>1 ){
+	  multi_bc_count++;
+	}
+	
+	if(known_barcodes.size()!=0){ // if we are just looking for all possible barcodes don't output reads etc.
+	  
+	  print_stats(sr_v[t][r].read_id, sr_v[t][r].vec_bc_for, out_stat_file);
+	  print_stats(sr_v[t][r].read_id, sr_v[t][r].vec_bc_rev, out_stat_file);
+      
+	  print_read(sr_v[t][r].read_id+"_+",sr_v[t][r].line,sr_v[t][r].qual_scores,sr_v[t][r].vec_bc_for,
+		     out_filename_prefix,split_file_by_barcode,found_barcodes,remove_barcodes);
+	  reverse(sr_v[t][r].qual_scores.begin(),sr_v[t][r].qual_scores.end());
+	  if(remove_barcodes || sr_v[t][r].vec_bc_for.size()==0) //case we just want to print read once if multiple bc found.
+	    print_read(sr_v[t][r].read_id+"_-",sr_v[t][r].rev_line,sr_v[t][r].qual_scores,sr_v[t][r].vec_bc_rev,
+		       out_filename_prefix,split_file_by_barcode,found_barcodes,remove_barcodes);
+	}
+      }
+    }
   }
   file.close();
   
