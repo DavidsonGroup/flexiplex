@@ -116,7 +116,7 @@ head -n <number of cells> flexiplex_barcodes_counts.txt > my_barcode_list.txt
 Optional: You may also want to filter this list by [the possible 10x barcodes](https://kb.10xgenomics.com/hc/en-us/articles/115004506263-What-is-a-barcode-whitelist-). An example of how to do this is given below:
 
 ```
-sort <(gunzip -c 3M-febrary-2018.txt.gz) <(cut -f1 my_barcode_list.txt) | uniq -d > my_filtered_barcode_list.txt
+sort <(gunzip -c 3M-february-2018.txt.gz) <(cut -f1 my_barcode_list.txt) | uniq -d > my_filtered_barcode_list.txt
 ```
 
 Then use this list to assign barcodes to reads:
