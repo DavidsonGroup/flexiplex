@@ -18,9 +18,11 @@
 
 #include "edlib.h"
 
+#include <ctime>
+
 using namespace std;
 
-const static string VERSION="0.96";
+const static string VERSION="0.96.1";
 
 // the help information which is printed when a user puts in the wrong
 // combination of command line options.
@@ -511,6 +513,8 @@ int main(int argc, char **argv){
   cerr << "For usage information type: flexiplex -h" << endl;
   
   istream * in;
+  FILE * ifile;
+    
   //check that a read file is given
   if(params>=argc){
     cerr << "No filename given... getting reads from stdin..." << endl;
@@ -526,7 +530,7 @@ int main(int argc, char **argv){
     }
     in=&file;
   }
-    
+  
   /********* FIND BARCODE IN READS ********/
   string sequence;
   int bc_count=0;
@@ -553,49 +557,71 @@ int main(int argc, char **argv){
       cerr << "Unknown read format... exiting" << endl; exit(1);
     }
   }
-
+  
   while ( getline (*in,line) ){
-    int buffer = 5000; //number of reads to pass to one thread.
+    const int buffer_size = 2000; //number of reads to pass to one thread.
     vector<vector<SearchResult>> sr_v(n_threads);
+    for(int i=0; i<n_threads; i++)
+      sr_v[i]=vector<SearchResult>(buffer_size); 
     vector<thread> threads(n_threads);
-    for(int t=0; t < n_threads*buffer; t++){ //get n_threads*buffer number or reads..
-      string read_id;
-      istringstream line_stream(read_id_line);
-      line_stream >> read_id;
-      read_id.erase(0,1);
+    for(int t=0; t < n_threads; t++){ //get n_threads*buffer number or reads..
+      for(int b=0 ; b < buffer_size ; b++){ 
+	SearchResult & sr = sr_v[t][b];
+	sr.line=line;
+	string read_id;
+	//sr.read_id= read_id_line.substr(1,read_id_line.find_first_not_of(" \t")-1);      
+	istringstream line_stream(read_id_line);
+	line_stream >> sr.read_id;
+	sr.read_id.erase(0,1);
+
+	    
+	//      string qual_scores="";
+	if(!is_fastq){ //fastq (account for multi-lines per read)
+	  string buffer_string; 
+	  while(getline(*in,buffer_string) && buffer_string[0]!='>')
+	    sr.line+=buffer_string;
+	  read_id_line=buffer_string;
+	} else { //fastq (get quality scores)
+	  for(int s=0; s<2; s++) getline(*in,sr.qual_scores);
+	  getline(*in,read_id_line);
+	}
       
-      string qual_scores="";
-      if(!is_fastq){ //fastq (account for multi-lines per read)
-	string buffer; 
-	while(getline(*in,buffer) && buffer[0]!='>')
-	  line+=buffer;
-	read_id_line=buffer;
-      } else { //fastq (get quality scores)
-	for(int s=0; s<2; s++) getline(*in,qual_scores);
-	getline(*in,read_id_line);
+	r_count++; //progress counter
+	if(r_count % 100000 == 0)
+	  cerr << r_count/((double) 1000000 ) << " million reads processed.." << endl;
+
+	//sr.read_id=read_id;
+	//sr.line=line;
+	//sr.qual_scores=qual_scores;
+	
+	//      sr_v[t][b] / buffer_size].push_back(sr);
+      
+	//this is quite ugly, must be a better way to do this..
+	if(b==buffer_size-1 && t==n_threads-1){
+	  break; //if it's the last in the chunk don't getline as this happens in the while statement
+	} else if( !getline(*in,line)){ //case we are at the end of the reads.
+	/**	std::time_t t_ = std::time(0);   // get time now
+	std::tm* now = std::localtime(&t_);
+	cout << "Read="<<t<< endl;
+	cout << "2. Added read for thread" << (t / buffer) << " at " << asctime(now) << endl; **/
+	  sr_v[t].resize(b+1);
+	  threads[t]=std::thread(search_read,ref(sr_v[t]),ref(known_barcodes),flank_edit_distance,edit_distance);
+	  for(int t2=t+1; t2 < n_threads ; t2++) sr_v[t2].resize(0);
+	  goto print_result; //advance the line
+	}
       }
-      
-      r_count++; //progress counter
-      if(r_count % 100000 == 0)
-	cerr << r_count/((double) 1000000 ) << " million reads processed.." << endl;
-
-      SearchResult sr;
-      sr.read_id=read_id;
-      sr.line=line;
-      sr.qual_scores=qual_scores;
-      sr_v[t / buffer].push_back(sr);
-
-      //this is quite ugly, must be a better way to do this..
-      if(t<(n_threads*buffer-1) && !getline(*in,line)) break; //advance the line
-    }
-
-    for(int t=0; t < n_threads & t < sr_v.size(); t++){ // assign the reads to each thread
+      // send reads to the thread
       threads[t]=std::thread(search_read,ref(sr_v[t]),ref(known_barcodes),flank_edit_distance,edit_distance);
     }
-
+    /**    t_ = std::time(0);   // get time now
+    now = std::localtime(&t_);
+    cout << "START-3" << asctime(now) << endl; 
+    **/
+  print_result:
+    
     for(int t=0; t < sr_v.size(); t++){ //loop over the threads and print out ther results
-
-      threads[t].join(); // wait for the threads to finish before printing
+      if(sr_v[t].size()>0) threads[t].join(); // wait for the threads to finish before printing
+      
       for(int r=0; r< sr_v[t].size(); r++){ // loop over the reads
 	
 	for(int b=0; b<sr_v[t][r].vec_bc_for.size(); b++)
@@ -613,7 +639,7 @@ int main(int argc, char **argv){
 	  
 	  print_stats(sr_v[t][r].read_id, sr_v[t][r].vec_bc_for, out_stat_file);
 	  print_stats(sr_v[t][r].read_id, sr_v[t][r].vec_bc_rev, out_stat_file);
-      
+	  
 	  print_read(sr_v[t][r].read_id+"_+",sr_v[t][r].line,sr_v[t][r].qual_scores,sr_v[t][r].vec_bc_for,
 		     out_filename_prefix,split_file_by_barcode,found_barcodes,remove_barcodes);
 	  reverse(sr_v[t][r].qual_scores.begin(),sr_v[t][r].qual_scores.end());
