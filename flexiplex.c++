@@ -22,7 +22,7 @@
 
 using namespace std;
 
-const static string VERSION="0.96.1";
+const static string VERSION="0.96.2";
 
 // the help information which is printed when a user puts in the wrong
 // combination of command line options.
@@ -363,6 +363,7 @@ void search_read(vector<SearchResult> & reads, unordered_set<string> & known_bar
 
 // MAIN is here!!
 int main(int argc, char **argv){
+  std::ios_base::sync_with_stdio(false);
 
   cerr << "FLEXIPLEX " << VERSION << endl;
 
