@@ -133,7 +133,7 @@ flexiplex -l <left flank> -k "<barcode1>,<barcode2>,<barcode3>,..." -r <right fl
 
 This assumes no UMI sequence is present. -e and -f which are the maximum barcode and flanking sequence edit distances may also need to be adjusted. As a guide we use -e 2 for 16bp barcodes and -f 12 for 32bp (left+right) flanking sequence.
 
-If barcodes are expected at the start and end of reads, force flexiplex not to chop reads when mutiple barcodes are seen (-r false). Reads can be separated into different files by barcodes (-s true).
+If barcodes are expected at the start and end of reads, force flexiplex not to chop reads when mutiple barcodes are seen (-i false). Reads can be separated into different files by barcodes (-s true).
 ```
 flexiplex -i false -s true -l <left flank> -k "<barcode1>,<barcode2>,<barcode3>,..." -r <right flank> -u 0
 ```
@@ -152,7 +152,7 @@ This is similar to [Demultiplexing other read data by barcode](#demultiplexing-o
 flexiplex -i false -l "GTATCGTCAAGGCACTCTTGCCTACGC" -k "CACTAGC,CACCAGC" -r "TCCAACTACCACAAGTTTATATTCAGT" -e 0 -f 15 -u 0 reads.fasta > kras_var_reads.fasta
 ```
 
-Where -k here lists the mutant and wild type variants (reverse complimented), with a few bp either side, and -p and -T are the adjacent sequence left and right of these respectively.
+Where -k here lists the mutant and wild type variants (reverse complimented), with a few bp either side, and -l and -r are the adjacent sequence left and right of these respectively.
 
 Multiple searches can be chained together. e.g. assign cellular barcodes then search for a specific mutation:
 ```
@@ -175,7 +175,7 @@ paste -d "&" Sample_R1.fastq Sample_R2.fastq | flexiplex -l "" -r "&" [-k barcod
 
 ## Simple search
 
-To perform a simple error tolerant grep-like search of a single sequence, split the sequence between the -p and -k (or -k and -T) options. e.g.:
+To perform a simple error tolerant grep-like search of a single sequence, split the sequence between the -l and -k (or -k and -r) options. e.g.:
 ```
 flexiplex -i false -l "CACTCTTGCCTACGC" -k "CACTAGC" -f 3 -e 0 reads.fasta
 ```
@@ -197,7 +197,7 @@ The UMIs will be added to the read ID in the output .fastq file and flexiplex_re
 
 Read with a matching barcode will be reported to standard output (or to individual files if the -s true option is provided).
 
-If read chopping and ID replacement is used (-r true, default):
+If read chopping and ID replacement is used (-i true, default):
   - Read IDs will be replaced with the following format (similar to FLAMES): <barcode>_<UMI>#<original ID>_<+/-><N>of<M> where <+/-> indicates whether the barcode was found on the forward or reverse strand of the original read, M is the number of barcodes found in direction indicated by +/- and N is the 1st, 2nd etc. of those barcode.
   - Reads will be reverse complimented if the barcode was found in the reverse direction. For 10x 3' data this puts all reads in the reverse direction of the mRNA (3'->5')
   - If multiple barcodes are found in the same direction the read is split at the position of the second or subsequent primer, and multiple reads reported.
@@ -208,7 +208,7 @@ If barcodes are found in both the forward and reverse directions on a read, the 
 Schematic of default behaviour if multiple barcodes are identified in a read
 
   
- If read chopping and ID replacement is not used (-r false):
+ If read chopping and ID replacement is not used (-i false):
   - Any read with matching flank and barcode sequence will be reported with read ID appended with _<+/-> as above.
   - Read is reported only once even if multiple flank/barcode sequences found
   - If a flank/barcode is only found in the reverse direction, the read will be reverse complimented.
@@ -280,7 +280,7 @@ The first line can be interpreted as there was 1 barcode which was found in 15 r
 
 Flexiplex can be slow if checking against a large number of barcodes (>1000) in noisy reads. Below are a few ideas you can try to speed up barcode demultiplexing:
   1. Run flexiplex in barcode [discovery mode](#assigning-single-cell-long-reads-to-10x-3-cellular-barcodes-when-barcodes-are-unknown), then intersect the found barcodes with the known list to reduce the search space.
-  2. Flexiplex is not currently multi-threaded, but you can achieve parallel excecution manually by splitting the .fasta or .fastq into several smaller files and running flexiplex on each in parallel. The split linux command can help split files up.
+  2. Flexiplex now supports multi-threaded, but can still be I/O limited. You may be able to achieve faster parallel excecution by splitting the .fasta or .fastq into several smaller files and running flexiplex on each in parallel. The split linux command can help split files up. Passing flexiplex a read filename, rather than the reads through stdin, may also be faster on some platforms.
   3. Reduce the tolerated edit distance of the flanking and barcode sequence (-f and -e flags)
    
 # Support or Contact
