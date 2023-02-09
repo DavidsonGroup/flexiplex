@@ -128,20 +128,20 @@ flexiplex -k my_filtered_barcode_list.txt reads.fastq > new_reads.fastq
 
 To demultiplex with other flanking and barcodes sequences, set these e.g.:
 ```
-flexiplex -p <left flank> -k "<barcode1>,<barcode2>,<barcode3>,..." -T <right flank> -u 0 reads.fastq > new_reads.fastq
+flexiplex -l <left flank> -k "<barcode1>,<barcode2>,<barcode3>,..." -r <right flank> -u 0 reads.fastq > new_reads.fastq
 ```
 
 This assumes no UMI sequence is present. -e and -f which are the maximum barcode and flanking sequence edit distances may also need to be adjusted. As a guide we use -e 2 for 16bp barcodes and -f 12 for 32bp (left+right) flanking sequence.
 
 If barcodes are expected at the start and end of reads, force flexiplex not to chop reads when mutiple barcodes are seen (-r false). Reads can be separated into different files by barcodes (-s true).
 ```
-flexiplex -r false -s true -p <left flank> -k "<barcode1>,<barcode2>,<barcode3>,..." -T <right flank> -u 0
+flexiplex -i false -s true -l <left flank> -k "<barcode1>,<barcode2>,<barcode3>,..." -r <right flank> -u 0
 ```
 
 flexiplex expects a left flanking sequence, so if barcodes are a fixed number of bases at the very start of a read you can add sequence to the beginnning to anchor the search. e.g.:
 
 ```
-cat file.fastq | sed 's/^/START/g' | sed 's/START@/@/g' | flexiplex -p "START" -T "" -u 0 -f 0 -k my_barcode_list.txt
+cat file.fastq | sed 's/^/START/g' | sed 's/START@/@/g' | flexiplex -l "START" -r "" -u 0 -f 0 -k my_barcode_list.txt
 ```
 
 ## Assigning genotype to cells - long reads
@@ -149,14 +149,14 @@ cat file.fastq | sed 's/^/START/g' | sed 's/START@/@/g' | flexiplex -p "START" -
 This is similar to [Demultiplexing other read data by barcode](#demultiplexing-other-read-data-by-barcode), but different alleles can be used in place of barcodes. e.g. to search for the KRAS variant c.34G>A run:
 
 ```
-flexiplex -r false -p "GTATCGTCAAGGCACTCTTGCCTACGC" -k "CACTAGC,CACCAGC" -T "TCCAACTACCACAAGTTTATATTCAGT" -e 0 -f 15 -u 0 reads.fasta > kras_var_reads.fasta
+flexiplex -i false -l "GTATCGTCAAGGCACTCTTGCCTACGC" -k "CACTAGC,CACCAGC" -r "TCCAACTACCACAAGTTTATATTCAGT" -e 0 -f 15 -u 0 reads.fasta > kras_var_reads.fasta
 ```
 
 Where -k here lists the mutant and wild type variants (reverse complimented), with a few bp either side, and -p and -T are the adjacent sequence left and right of these respectively.
 
 Multiple searches can be chained together. e.g. assign cellular barcodes then search for a specific mutation:
 ```
-flexiplex -k barcode_list.txt reads.fasta | flexiplex -n barcode_mutation_mapping -r false -p "GTATCGTCAAGGCACTCTTGCCTACGC" -k "CACTAGC,CACCAGC" -T "TCCAACTACCACAAGTTTATATTCAGT" -e 0 -f 15 -u 0 reads.fasta > kras_var_reads_with_barcodes.fasta
+flexiplex -k barcode_list.txt reads.fasta | flexiplex -n barcode_mutation_mapping -i false -l "GTATCGTCAAGGCACTCTTGCCTACGC" -k "CACTAGC,CACCAGC" -r "TCCAACTACCACAAGTTTATATTCAGT" -e 0 -f 15 -u 0 reads.fasta > kras_var_reads_with_barcodes.fasta
 ```
 
 ## Assigning genotype to cells - short reads
@@ -164,20 +164,20 @@ flexiplex -k barcode_list.txt reads.fasta | flexiplex -n barcode_mutation_mappin
 Flexiplex can be also be used on 10x short read data to search for cells with a specific target sequence such as a mutation or fusion of interest from the raw read data. This is achieved by "pasting" the two read ends together and running in a similar way as you would for long reads. e.g. To search for an NPM1 variant common in AML cancers, c.863_864insTCTG, on 10x 3' data: 
 
 ``` 
-paste -d "&" Sample_R1.fastq Sample_R2.fastq | flexiplex -p <left seq> -k "TCTG" -T <right seq> -u 0 -r false | flexiplex -p "" -T "&"
+paste -d "&" Sample_R1.fastq Sample_R2.fastq | flexiplex -l <left seq> -k "TCTG" -r <right seq> -u 0 -i false | flexiplex -l "" -r "&"
 ```
 
 In this example we assume no sequencing errors in the barcodes as the data is Illumina, however a barcode list could also be provided (to the final command) to error correct. The order of demuliplexing and searching can also be switched. e.g.:
 
 ``` 
-paste -d "&" Sample_R1.fastq Sample_R2.fastq | flexiplex -p "" -T "&" [-k barcodes_list.txt] | flexiplex -p <left seq> -k "TCTG" -T <right seq> -u 0 -r false 
+paste -d "&" Sample_R1.fastq Sample_R2.fastq | flexiplex -l "" -r "&" [-k barcodes_list.txt] | flexiplex -l <left seq> -k "TCTG" -r <right seq> -u 0 -i false 
 ```
 
 ## Simple search
 
 To perform a simple error tolerant grep-like search of a single sequence, split the sequence between the -p and -k (or -k and -T) options. e.g.:
 ```
-flexiplex -r false -p "CACTCTTGCCTACGC" -k "CACTAGC" -f 3 -e 0 reads.fasta
+flexiplex -i false -l "CACTCTTGCCTACGC" -k "CACTAGC" -f 3 -e 0 reads.fasta
 ```
 
 Matching reads will be printed to standard out. Edit distances (-e and -f ) can be adjusted as required.
@@ -186,7 +186,7 @@ Matching reads will be printed to standard out. Edit distances (-e and -f ) can 
 
 Recent library prepration kits for ONT PCR amplified cDNA attach unique molecular identifiers (UMIs) to the 5' end of transcripts. These can be used for deduplication in downstream data analysis. The UMI sequence for each read can be extracted using flexiplex:
 ```
-flexiplex -p TTGGTGCTGATATT -k "GCTTT" -T TTTGGGG -u 22 -f 3 -e 1 reads.fastq
+flexiplex -l TTGGTGCTGATATT -k "GCTTT" -r TTTGGGG -u 22 -f 3 -e 1 reads.fastq
 ```
 The UMIs will be added to the read ID in the output .fastq file and flexiplex_reads_barcodes.txt will contain a list of identified UMIs. Note that the barcode sequence here, GCTTT comes from the left flanking sequence is needed as a placeholder. The example above comes from data we have tested on and may need to be adjusted for different library preparation kits.
 
