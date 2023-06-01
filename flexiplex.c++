@@ -47,7 +47,7 @@ void print_usage(){
   cerr << "     -f N   Maximum edit distance to primer+polyT (default 8).\n";
   cerr << "     -p N   Number of threads (default: 1).\n";
   cerr << "     -h     Print this usage information.\n";
-  cerr << "\n";
+  cerr << endl;
 }
 
 
@@ -500,32 +500,32 @@ int main(int argc, char **argv){
     }
     case 'p':{
       n_threads=atoi(optarg);
-      cerr << "Setting number of threads to "<< n_threads << "\n";
+      cerr << "Setting number of threads to "<< n_threads << endl;
       params+=2;
       break;
     }
     case '?': //other unknown options
-      cerr << "Unknown option.. stopping\n";
+      cerr << "Unknown option.. stopping" << endl;
       print_usage();
       exit(1);
     }
   }
   
-  cerr << "For usage information type: flexiplex -h\n";
+  cerr << "For usage information type: flexiplex -h" << endl;
   
   istream * in;
   FILE * ifile;
     
   //check that a read file is given
   if(params>=argc){
-    cerr << "No filename given... getting reads from stdin...\n";
+    cerr << "No filename given... getting reads from stdin..." << endl;
     in=&std::cin;
   } else {
     // check that the reads fileis okay
     string reads_file=argv[params];
     file.open(reads_file);
     if(!(file.good())){
-      cerr << "Unable to open file " << reads_file << "\n";
+      cerr << "Unable to open file " << reads_file << endl;
       print_usage();
       exit(1);
     }
@@ -555,7 +555,7 @@ int main(int argc, char **argv){
     if(read_id_line[0]=='>'){ is_fastq=false;
     } else if (read_id_line[0] == '@'){ //fasta
     } else {
-      cerr << "Unknown read format... exiting\n"; exit(1);
+      cerr << "Unknown read format... exiting" << endl; exit(1);
     }
   }
   
@@ -589,7 +589,7 @@ int main(int argc, char **argv){
       
 	r_count++; //progress counter
 	if(r_count % 100000 == 0)
-	  cerr << r_count/((double) 1000000 ) << " million reads processed..\n";
+	  cerr << r_count/((double) 1000000 ) << " million reads processed.." << endl;
 
 	//sr.read_id=read_id;
 	//sr.line=line;
@@ -656,7 +656,7 @@ int main(int argc, char **argv){
   cerr << "Number of reads processed: " << r_count << "\n";
   cerr << "Number of reads where a barcode was found: " << bc_count << "\n";
   cerr << "Number of reads where more than one barcode was found: " << multi_bc_count << "\n";
-  cerr << "All done!" << "\n";
+  cerr << "All done!" << endl;
 
   if(known_barcodes.size()>0){
     out_stat_file.close();
