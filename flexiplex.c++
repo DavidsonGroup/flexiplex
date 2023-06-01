@@ -85,6 +85,7 @@ struct Barcode {
   int flank_editd;
   int flank_start;
   int flank_end;
+  bool unambiguous;
 } ;
 
 struct SearchResult {
@@ -155,7 +156,7 @@ Barcode get_barcode(string & seq,
 
   //initialise struct variables for return:
   Barcode barcode;
-  barcode.editd=100; barcode.flank_editd=100;
+  barcode.editd=100; barcode.flank_editd=100; barcode.unambiguous = false;
 
   //initialise edlib configuration
   EdlibEqualityPair additionalEqualities[5] = {{'?','A'},{'?','C'},{'?','G'},{'?','T'},{'?','N'}};
@@ -183,9 +184,13 @@ Barcode get_barcode(string & seq,
     search_pattern.umi_seq.length(),
     search_pattern.polyA.length()
   };
-  std::partial_sum(subpattern_lengths.begin(), subpattern_lengths.end(), subpattern_lengths.begin());
 
-  vector<int> read_to_subpatterns = {0, 0, 0, 0};
+  std::vector<long unsigned int> subpattern_ends;
+  subpattern_ends.resize(subpattern_lengths.size());
+  std::inclusive_scan(subpattern_lengths.begin(), subpattern_lengths.end(), subpattern_ends.begin());
+
+  vector<int> read_to_subpatterns;
+  read_to_subpatterns.reserve(subpattern_ends.size());
 
   // initialise pointers
   int i_read = barcode.flank_start;
@@ -193,16 +198,20 @@ Barcode get_barcode(string & seq,
   int i_subpattern = 0;
 
   // walk through edlib aligment
-  for (int i = 0; i < result.alignmentLength; ++i) {
-    int value = static_cast<int>(result.alignment[i]);
+  // 0 for match
+  // 1 for insertion to target
+  // 2 for insertion to query
+  // 3 for mismatch 
+  std::vector<unsigned char> alignment_vector(result.alignment, result.alignment + result.alignmentLength);
+  for (const auto& value : alignment_vector) {
     if (value != 1) {
       i_read++;
     }
     if (value != 2) {
       i_pattern++;
     }
-    if (i_pattern >= subpattern_lengths[i_subpattern]) {
-      read_to_subpatterns[i_subpattern] = i_read;
+    if (i_pattern >= subpattern_ends[i_subpattern]) {
+      read_to_subpatterns.emplace_back(i_read);
       i_subpattern++;
     }
   }
@@ -215,6 +224,7 @@ Barcode get_barcode(string & seq,
   if(known_barcodes->size()==0 || (known_barcodes->find(exact_bc) != known_barcodes->end())){ 
     barcode.barcode=exact_bc;
     barcode.editd=0;
+    barcode.unambiguous=true;
     barcode.umi=seq.substr(read_to_subpatterns[1], read_to_subpatterns[2]);//resul
     return(barcode);
   }
@@ -228,8 +238,11 @@ Barcode get_barcode(string & seq,
   for(; known_barcodes_itr!=known_barcodes->end(); known_barcodes_itr++){
     search_string=(*known_barcodes_itr); //known barcode to check again
     editDistance = edit_distance(barcode_seq,search_string,endDistance,barcode_max_editd);
-    if(editDistance < barcode.editd && editDistance <= barcode_max_editd){ //if best so far, update
-      barcode.editd=editDistance; 
+    if (editDistance == barcode.editd) {
+      barcode.unambiguous=false;    
+    } else if (editDistance < barcode.editd && editDistance <= barcode_max_editd) { //if best so far, update
+      barcode.unambiguous=true;
+      barcode.editd=editDistance;
       barcode.barcode=*known_barcodes_itr;
       barcode.umi=seq.substr(read_to_subpatterns[0]-OFFSET+endDistance,search_pattern.umi_seq.length());//assumes no error in UMI seq.
       if(editDistance==0){ //if perfect match is found we're done.
@@ -247,7 +260,7 @@ vector<Barcode> big_barcode_search(string & sequence, unordered_set<string> & kn
 
   //search for barcode
   Barcode result=get_barcode(sequence,&known_barcodes,max_flank_editd,max_editd); //,ss);
-  if(result.editd<=max_editd) //add to return vector if edit distance small enough
+  if(result.editd<=max_editd && result.unambiguous) //add to return vector if edit distance small enough
     return_vec.push_back(result);
   
   //if a result was found, mask out the flanking sequence and search again in case there are more.
