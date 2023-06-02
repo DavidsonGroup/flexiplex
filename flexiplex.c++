@@ -299,8 +299,7 @@ void print_stats(string read_id, vector<Barcode> & vec_bc, ostream & out_stream)
 	       << vec_bc.at(b).barcode << "\t"
 	       << vec_bc.at(b).flank_editd << "\t"
 	       << vec_bc.at(b).editd << "\t"
-	       << vec_bc.at(b).umi << "\t"
-	       << endl;
+	       << vec_bc.at(b).umi << endl;
   }
 }
 
