@@ -220,12 +220,12 @@ Barcode get_barcode(string & seq,
   
   //if not checking against known list of barcodes, return sequence after the primer
   //also check for a perfect match straight up as this will save computer later.
-  string exact_bc=seq.substr(read_to_subpatterns[0], read_to_subpatterns[1]);
+  string exact_bc=seq.substr(read_to_subpatterns[0], read_to_subpatterns[1] - read_to_subpatterns[0]);
   if(known_barcodes->size()==0 || (known_barcodes->find(exact_bc) != known_barcodes->end())){ 
     barcode.barcode=exact_bc;
     barcode.editd=0;
     barcode.unambiguous=true;
-    barcode.umi=seq.substr(read_to_subpatterns[1], read_to_subpatterns[2]);//resul
+    barcode.umi=seq.substr(read_to_subpatterns[1], search_pattern.umi_seq.length());
     return(barcode);
   }
   
