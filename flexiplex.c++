@@ -63,10 +63,12 @@ char compliment(char& c){
   }
 }
 
-//Inplace reverse compliment
-void reverse_compliment(string & seq){
-   reverse(seq.begin(),seq.end());
-   transform(seq.begin(),seq.end(),seq.begin(),compliment);
+// Reverse complement
+std::string reverse_compliment(const std::string& seq) {
+  std::string rev_seq(seq.rbegin(), seq.rend());
+  std::transform(rev_seq.begin(), rev_seq.end(), rev_seq.begin(),
+                 [](char c) { return compliment(c); });
+  return rev_seq;
 }
 
 //Holds the search string patterns
@@ -101,37 +103,47 @@ struct SearchResult {
 // https://en.wikibooks.org/wiki/Algorithm_Implementation/Strings/Levenshtein_distance#C++
 // s2 is always assumned to be the shorter string (barcode)
 unsigned int edit_distance(const std::string& s1, const std::string& s2, unsigned int &end, int max_editd){
-  
-  std::size_t len1 = s1.size()+1, len2 = s2.size()+1;
-  const char * s1_c = s1.c_str(); const char * s2_c = s2.c_str();
 
-  vector< unsigned int> dist_holder(len1*len2);
+  const std::string_view s1_view(s1);
+  const std::string_view s2_view(s2);
+
+  const std::size_t len1 = s1_view.size() + 1;
+  const std::size_t len2 = s2_view.size() + 1;
+
+  std::vector<unsigned int> dist_holder(len1 * len2);
   //initialise the edit distance matrix.
   //penalise for gaps at the start and end of the shorter sequence (j)
   //but not for shifting the start/end of the longer sequence (i,0)
-  dist_holder[0]=0; //[0][0]
-  for(unsigned int j = 1; j < len2; ++j) dist_holder[j] = j; //[0][j];
-  for(unsigned int i = 1; i < len1; ++i) dist_holder[i*len2] = 0; //[i][0];
-    
-  int best=len2;
-  end=len1-1;
+  dist_holder[0] = 0; //[0][0]
+  for (std::size_t j = 1; j < len2; ++j)
+    dist_holder[j] = j; //[0][j];
+  for (std::size_t i = 1; i < len1; ++i)
+    dist_holder[i * len2] = 0; //[i][0];
 
-  //loop over the distance matrix elements and calculate running distance
-  for(unsigned int j = 1; j < len2; ++j){
-    bool any_below_threshold=false; //flag used for early exit
-    for(unsigned int i = 1; i < len1; ++i){
-      int sub=(s1_c[i - 1] == s2_c[j - 1]) ? 0 : 1 ; //are the bases the same?
-      if(sub==0) //if yes, no need to incremet distance
-	dist_holder[i*len2+j]=dist_holder[(i-1)*len2+(j-1)];
-      else //otherwise add insertion,deletion or substituation 
-	dist_holder[i*len2+j] = std::min({ //j+i*len2  //set[i][j]
-	    dist_holder[(i-1)*len2+j] + 1, //[i-1][j]
-	    dist_holder[i*len2+(j-1)] + 1, //[i][j-1]
-	    dist_holder[(i-1)*len2+(j-1)] + 1}); // ((s1_c[i - 1] == s2_c[j - 1]) ? 0 : 1) });
-      if(dist_holder[i*len2+j] <= max_editd) any_below_threshold=true;
-      if(j==(len2-1) && dist_holder[i*len2+j]<best){ //if this is the last row in j
-	best=dist_holder[i*len2+j];                  //check if this is the best running score
-	end=i;                                       //update the end position of alignment
+  unsigned int best = len2;
+  end = len1 - 1;
+
+  // loop over the distance matrix elements and calculate running distance
+  for (std::size_t j = 1; j < len2; ++j) {
+    bool any_below_threshold = false; // flag used for early exit
+    for (std::size_t i = 1; i < len1; ++i) {
+      unsigned int sub = (s1_view[i - 1] == s2_view[j - 1]) ? 0 : 1; // match / mismatch score
+
+      const unsigned int &top_left = dist_holder[(i - 1) * len2 + (j - 1)];
+      const unsigned int &left = dist_holder[i * len2 + (j - 1)];
+      const unsigned int &top = dist_holder[(i - 1) * len2 + j];
+
+      unsigned int min_value = std::min({top + 1, left + 1, top_left + sub});
+      dist_holder[i * len2 + j] = min_value;
+
+      if (min_value <= max_editd)
+        any_below_threshold = true;
+      if (j == (len2 - 1) && min_value < best) {
+        // if this is the last row in j
+        // check if this is the best running score
+        // update the end position of alignment
+        best = min_value;
+        end = i;
       }
     }
     if(!any_below_threshold){ //early exit to save time.
@@ -146,8 +158,8 @@ unsigned int edit_distance(const std::string& s1, const std::string& s2, unsigne
 //a targeted search in the region for barcode
 //Seaquence seearch is performed using edlib
 
-Barcode get_barcode(string & seq,
-		    unordered_set<string> *known_barcodes,
+Barcode get_barcode(const string & seq,
+		    const unordered_set<string> &known_barcodes,
 		    int flank_max_editd,
 		    int barcode_max_editd){//,
   //		    SearchSeq & ss){
@@ -169,7 +181,7 @@ Barcode get_barcode(string & seq,
     search_pattern.umi_seq+
     search_pattern.polyA;
   EdlibAlignResult result = edlibAlign(search_string.c_str(), search_string.length(), seq.c_str(), seq.length(), edlibConf);
-  if(result.status != EDLIB_STATUS_OK | result.numLocations==0 ){
+  if(result.status != EDLIB_STATUS_OK || result.numLocations==0 ){
     edlibFreeAlignResult(result);
     return(barcode); // no match found - return
   } //fill in info about found primer and polyT location
@@ -221,7 +233,7 @@ Barcode get_barcode(string & seq,
   //if not checking against known list of barcodes, return sequence after the primer
   //also check for a perfect match straight up as this will save computer later.
   string exact_bc=seq.substr(read_to_subpatterns[0], read_to_subpatterns[1] - read_to_subpatterns[0]);
-  if(known_barcodes->size()==0 || (known_barcodes->find(exact_bc) != known_barcodes->end())){ 
+  if(known_barcodes.empty() || (known_barcodes.find(exact_bc) != known_barcodes.end())){ 
     barcode.barcode=exact_bc;
     barcode.editd=0;
     barcode.unambiguous=true;
@@ -233,20 +245,18 @@ Barcode get_barcode(string & seq,
   string barcode_seq=seq.substr(read_to_subpatterns[0]-OFFSET,search_pattern.temp_barcode.length()+2*OFFSET);
   
   //iterate over all the known barcodes, checking each sequentially
-  unordered_set<string>::iterator known_barcodes_itr=known_barcodes->begin();
   unsigned int editDistance; unsigned int endDistance;
-  for(; known_barcodes_itr!=known_barcodes->end(); known_barcodes_itr++){
-    search_string=(*known_barcodes_itr); //known barcode to check again
-    editDistance = edit_distance(barcode_seq,search_string,endDistance,barcode_max_editd);
+  for (const auto &known_bc : known_barcodes) {
+    editDistance = edit_distance(barcode_seq,known_bc,endDistance,barcode_max_editd);
     if (editDistance == barcode.editd) {
       barcode.unambiguous=false;    
     } else if (editDistance < barcode.editd && editDistance <= barcode_max_editd) { //if best so far, update
       barcode.unambiguous=true;
       barcode.editd=editDistance;
-      barcode.barcode=*known_barcodes_itr;
+      barcode.barcode=known_bc;
       barcode.umi=seq.substr(read_to_subpatterns[0]-OFFSET+endDistance,search_pattern.umi_seq.length());//assumes no error in UMI seq.
-      if(editDistance==0){ //if perfect match is found we're done.
-	return(barcode);
+      if(editDistance==0) { //if perfect match is found we're done.
+        return(barcode);
       }
     }
   }
@@ -254,24 +264,23 @@ Barcode get_barcode(string & seq,
 }
 
 //search a read for one or more barcodes (parent function that calls get_barcode)
-vector<Barcode> big_barcode_search(string & sequence, unordered_set<string> & known_barcodes,
+vector<Barcode> big_barcode_search(const string & sequence,const unordered_set<string> & known_barcodes,
 				   int max_flank_editd, int max_editd){ //, SearchSeq & ss){
   vector<Barcode> return_vec; //vector of all the barcodes found
 
   //search for barcode
-  Barcode result=get_barcode(sequence,&known_barcodes,max_flank_editd,max_editd); //,ss);
+  Barcode result=get_barcode(sequence,known_barcodes,max_flank_editd,max_editd); //,ss);
   if(result.editd<=max_editd && result.unambiguous) //add to return vector if edit distance small enough
-    return_vec.push_back(result);
+    return_vec.emplace_back(result);
   
   //if a result was found, mask out the flanking sequence and search again in case there are more.
-  if(return_vec.size()>0){
+  if (!return_vec.empty()) {
     string masked_sequence = sequence;
-    for(int i=0; i<return_vec.size(); i++){
-      int flank_length=return_vec.at(i).flank_end-return_vec.at(i).flank_start;
-      masked_sequence.replace(return_vec.at(i).flank_start,flank_length,string(flank_length,'X'));
+    for(const auto &barcode : return_vec){
+      int flank_length = barcode.flank_end - barcode.flank_start;
+      masked_sequence.replace(barcode.flank_start, flank_length,string(flank_length,'X'));
     } //recursively call this function until no more barcodes are found
-    vector<Barcode> masked_res;
-    masked_res=big_barcode_search(masked_sequence,known_barcodes,max_flank_editd,max_editd); //,ss);
+    vector<Barcode> masked_res = big_barcode_search(masked_sequence,known_barcodes,max_flank_editd,max_editd);
     return_vec.insert(return_vec.end(),masked_res.begin(),masked_res.end()); //add to result
   }
     
@@ -293,31 +302,26 @@ bool get_bool_opt_arg(string value){
 }
 
 // print information about barcodes
-void print_stats(string read_id, vector<Barcode> & vec_bc, ostream & out_stream){
-  for(int b=0; b<vec_bc.size() ; b++){
-    out_stream << read_id << "\t"
-	       << vec_bc.at(b).barcode << "\t"
-	       << vec_bc.at(b).flank_editd << "\t"
-	       << vec_bc.at(b).editd << "\t"
-	       << vec_bc.at(b).umi << endl;
+void print_stats(const string& read_id, const vector<Barcode>& vec_bc, ostream& out_stream) {
+  for (const auto& barcode : vec_bc) {
+    out_stream << read_id << '\t'
+               << barcode.barcode << "\t"
+	             << barcode.flank_editd << "\t"
+	             << barcode.editd << "\t"
+	             << barcode.umi << '\n';
   }
 }
 
-void print_line(string id, string read, string quals, ostream & out_stream){
-
-  //flag for read format
-  bool is_fastq=!(quals==""); //no quality scores passed = fasta
-
+void print_line(const string& id, const string& read, const string& quals, ostream& out_stream) {
+  const char delimiter = quals.empty() ? '>' : '@';
+  
   //output to the new read file
-    if(is_fastq)
-      out_stream << "@" << id << endl;
-    else
-      out_stream << ">" << id << endl;
-    out_stream << read << endl;
-    if(is_fastq){
-      out_stream << "+" << id << endl;
-      out_stream << quals << endl;
-    }
+  out_stream << delimiter << id << '\n'
+             << read << '\n';
+  
+  if (!quals.empty())
+    out_stream << '+' << id << '\n'
+               << quals << '\n';
 }
 
 //print fastq or fasta lines..
@@ -372,21 +376,13 @@ void print_read(string read_id,string read, string qual,
 // separated out from main so that this can be run with threads
 void search_read(vector<SearchResult> & reads, unordered_set<string> & known_barcodes,
 			 int flank_edit_distance, int edit_distance){
-  
-  for(int r=0; r<reads.size(); r++){
-    
+  for (auto& read : reads) {
     //forward search
-    reads[r].vec_bc_for=big_barcode_search(reads[r].line,
-					   known_barcodes,
-					   flank_edit_distance,
-					   edit_distance);
-    reads[r].rev_line=reads[r].line;
-    reverse_compliment(reads[r].rev_line);
+    read.vec_bc_for = big_barcode_search(read.line, known_barcodes, flank_edit_distance, edit_distance);
+
     //Check the reverse compliment of the read
-    reads[r].vec_bc_rev=big_barcode_search(reads[r].rev_line,
-					   known_barcodes,
-					   flank_edit_distance,
-					   edit_distance);
+    read.rev_line = reverse_compliment(read.line);
+    read.vec_bc_rev = big_barcode_search(read.rev_line, known_barcodes, flank_edit_distance, edit_distance);
   }
 }
 
