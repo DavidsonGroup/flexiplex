@@ -187,7 +187,7 @@ Barcode get_barcode(string & seq,
 
   std::vector<long unsigned int> subpattern_ends;
   subpattern_ends.resize(subpattern_lengths.size());
-  std::inclusive_scan(subpattern_lengths.begin(), subpattern_lengths.end(), subpattern_ends.begin());
+  std::partial_sum(subpattern_lengths.begin(), subpattern_lengths.end(), subpattern_ends.begin());
 
   vector<int> read_to_subpatterns;
   read_to_subpatterns.reserve(subpattern_ends.size());
