@@ -55,7 +55,7 @@ To see usage information, run
 # Usage
 
 ```
-FLEXIPLEX 0.96
+FLEXIPLEX 0.97
 
 usage: flexiplex [options] [reads_input]
   reads_input: a .fastq or .fasta file. Will read from stdin if empty.
