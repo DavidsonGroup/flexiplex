@@ -15,6 +15,7 @@
 #include <vector>
 #include <algorithm>
 #include <thread>
+#include <numeric>
 
 #include "edlib.h"
 
@@ -84,6 +85,7 @@ struct Barcode {
   int flank_editd;
   int flank_start;
   int flank_end;
+  bool unambiguous;
 } ;
 
 struct SearchResult {
@@ -154,7 +156,7 @@ Barcode get_barcode(string & seq,
 
   //initialise struct variables for return:
   Barcode barcode;
-  barcode.editd=100; barcode.flank_editd=100;
+  barcode.editd=100; barcode.flank_editd=100; barcode.unambiguous = false;
 
   //initialise edlib configuration
   EdlibEqualityPair additionalEqualities[5] = {{'?','A'},{'?','C'},{'?','G'},{'?','T'},{'?','N'}};
@@ -174,36 +176,61 @@ Barcode get_barcode(string & seq,
   barcode.flank_editd=result.editDistance;
   barcode.flank_start=result.startLocations[0];
   barcode.flank_end=result.endLocations[0];
-  edlibFreeAlignResult(result);
-  
-  //now we need to work out where the start of the barcode sequence is to extract it and match
-  int primer_length_in_seq=search_pattern.primer.size(); //set the start of the barcode as primer length from start of primer
-  if(search_pattern.primer!=""){ //search for the primer to refine (deal with indel errors)
-    string search_region=seq.substr(barcode.flank_start,search_pattern.primer.length()+OFFSET);
-    EdlibAlignResult result_targeted = edlibAlign(
-						  search_pattern.primer.c_str(),
-						  search_pattern.primer.length(),
-						  search_region.c_str(),
-						  search_region.length(), edlibConf);
-    if(result_targeted.status == EDLIB_STATUS_OK && result_targeted.numLocations > 0 ){
-      primer_length_in_seq=result_targeted.endLocations[0]+1; //new barcode starting point
+
+  // Extract sub-patterns from aligment directly
+  vector<long unsigned int> subpattern_lengths = {
+    search_pattern.primer.length(),
+    search_pattern.temp_barcode.length(),
+    search_pattern.umi_seq.length(),
+    search_pattern.polyA.length()
+  };
+
+  std::vector<long unsigned int> subpattern_ends;
+  subpattern_ends.resize(subpattern_lengths.size());
+  std::partial_sum(subpattern_lengths.begin(), subpattern_lengths.end(), subpattern_ends.begin());
+
+  vector<int> read_to_subpatterns;
+  read_to_subpatterns.reserve(subpattern_ends.size());
+
+  // initialise pointers
+  int i_read = barcode.flank_start;
+  int i_pattern = 0;
+  int i_subpattern = 0;
+
+  // walk through edlib aligment
+  // 0 for match
+  // 1 for insertion to target
+  // 2 for insertion to query
+  // 3 for mismatch 
+  std::vector<unsigned char> alignment_vector(result.alignment, result.alignment + result.alignmentLength);
+  for (const auto& value : alignment_vector) {
+    if (value != 1) {
+      i_read++;
     }
-    edlibFreeAlignResult(result_targeted);
+    if (value != 2) {
+      i_pattern++;
+    }
+    if (i_pattern >= subpattern_ends[i_subpattern]) {
+      read_to_subpatterns.emplace_back(i_read);
+      i_subpattern++;
+    }
   }
+
+  edlibFreeAlignResult(result);
   
   //if not checking against known list of barcodes, return sequence after the primer
   //also check for a perfect match straight up as this will save computer later.
-  int BC_start=barcode.flank_start+primer_length_in_seq;
-  string exact_bc=seq.substr(BC_start,search_pattern.temp_barcode.length());
+  string exact_bc=seq.substr(read_to_subpatterns[0], read_to_subpatterns[1] - read_to_subpatterns[0]);
   if(known_barcodes->size()==0 || (known_barcodes->find(exact_bc) != known_barcodes->end())){ 
     barcode.barcode=exact_bc;
     barcode.editd=0;
-    barcode.umi=seq.substr(BC_start+search_pattern.temp_barcode.length(),search_pattern.umi_seq.length());//resul
+    barcode.unambiguous=true;
+    barcode.umi=seq.substr(read_to_subpatterns[1], search_pattern.umi_seq.length());
     return(barcode);
   }
   
   // otherwise widen our search space and the look for matches with errors
-  string barcode_seq=seq.substr(BC_start-OFFSET,search_pattern.temp_barcode.length()+2*OFFSET);
+  string barcode_seq=seq.substr(read_to_subpatterns[0]-OFFSET,search_pattern.temp_barcode.length()+2*OFFSET);
   
   //iterate over all the known barcodes, checking each sequentially
   unordered_set<string>::iterator known_barcodes_itr=known_barcodes->begin();
@@ -211,10 +238,13 @@ Barcode get_barcode(string & seq,
   for(; known_barcodes_itr!=known_barcodes->end(); known_barcodes_itr++){
     search_string=(*known_barcodes_itr); //known barcode to check again
     editDistance = edit_distance(barcode_seq,search_string,endDistance,barcode_max_editd);
-    if(editDistance < barcode.editd && editDistance <= barcode_max_editd){ //if best so far, update
-      barcode.editd=editDistance; 
+    if (editDistance == barcode.editd) {
+      barcode.unambiguous=false;    
+    } else if (editDistance < barcode.editd && editDistance <= barcode_max_editd) { //if best so far, update
+      barcode.unambiguous=true;
+      barcode.editd=editDistance;
       barcode.barcode=*known_barcodes_itr;
-      barcode.umi=seq.substr(BC_start-OFFSET+endDistance,search_pattern.umi_seq.length());//assumes no error in UMI seq.
+      barcode.umi=seq.substr(read_to_subpatterns[0]-OFFSET+endDistance,search_pattern.umi_seq.length());//assumes no error in UMI seq.
       if(editDistance==0){ //if perfect match is found we're done.
 	return(barcode);
       }
@@ -230,7 +260,7 @@ vector<Barcode> big_barcode_search(string & sequence, unordered_set<string> & kn
 
   //search for barcode
   Barcode result=get_barcode(sequence,&known_barcodes,max_flank_editd,max_editd); //,ss);
-  if(result.editd<=max_editd) //add to return vector if edit distance small enough
+  if(result.editd<=max_editd && result.unambiguous) //add to return vector if edit distance small enough
     return_vec.push_back(result);
   
   //if a result was found, mask out the flanking sequence and search again in case there are more.
