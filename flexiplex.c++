@@ -23,7 +23,7 @@
 
 using namespace std;
 
-const static string VERSION="0.96.2";
+const static string VERSION="0.97";
 
 // the help information which is printed when a user puts in the wrong
 // combination of command line options.
@@ -299,8 +299,7 @@ void print_stats(string read_id, vector<Barcode> & vec_bc, ostream & out_stream)
 	       << vec_bc.at(b).barcode << "\t"
 	       << vec_bc.at(b).flank_editd << "\t"
 	       << vec_bc.at(b).editd << "\t"
-	       << vec_bc.at(b).umi << "\t"
-	       << "\n";
+	       << vec_bc.at(b).umi << "\n";
   }
 }
 
