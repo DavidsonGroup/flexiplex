@@ -7,12 +7,11 @@ import sys
 
 
 def find_bounds(df, col="count", top_count=50, bottom_quantile=0.95):
-    low = df[col].quantile(bottom_quantile)
-    high = df[col][top_count]
+    low = int(df[col].quantile(bottom_quantile))
+    high = int(df[col][top_count])
 
-    log.debug("Removing all counts not in open interval (%d, %d)", low, high)
-    result = df[(df[col] > low) & (df[col] < high)].copy()
-    return result
+    log.debug("Discovered bounds interval (%d, %d)", low, high)
+    return (low, high)
 
 
 def n_derivative(df, x, y):
@@ -28,10 +27,22 @@ def filter_whitelist(df, whitelist_file):
     whitelist = set(x.rstrip() for x in whitelist_file.readlines())
     log.debug("Read whitelist")
 
-    filtered = df[df["barcode"] in whitelist]
-    log.debug(filtered)
+    rows_orig = len(df)
 
-    return df
+    filtered = df[df["barcode"].isin(whitelist)]
+    rows_filt = len(filtered)
+
+    diff = rows_orig - rows_filt
+    percent = diff / rows_orig * 100
+
+    log.info(
+        "Filtered with whitelist, removed %d out of %d barcodes (%d%% of all reads)",
+        diff,
+        rows_orig,
+        percent,
+    )
+
+    return filtered
 
 
 def read_counts(file):
@@ -53,7 +64,16 @@ def write_df(df, file):
 
 
 def find_rank(df):
-    df_bounded = find_bounds(df)
+    bounds = find_bounds(df)
+
+    log.debug(
+        "Removing all barcodes with count value not within the interval %s",
+        bounds,
+    )
+
+    df_bounded = df[
+        (df["count"] > bounds[0]) & (df["count"] < bounds[1])
+    ].copy()
 
     df_bounded.drop_duplicates(subset="count", keep="first", inplace=True)
 
@@ -75,7 +95,7 @@ def find_rank(df):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        prog="find-inf.py",
+        prog="filter-barcodes.py",
         description="finds the inflection point when demultiplexing using flexiplex",
     )
     parser.add_argument(
@@ -92,47 +112,76 @@ if __name__ == "__main__":
         help="input file, typically called flexiplex_barcodes_counts.txt. defaults to stdin if not given",
     )
     parser.add_argument(
-        "-r",
-        "--rank-only",
-        action="store_true",
-        help="only show the rank of the inflection point; do not output the filtered barcodes",
-    )
-    parser.add_argument(
-        "-g",
-        "--graph",
-        action="store_true",
-        help="output a graph with the inflection point marked, requires matplotlib",
-    )
-    parser.add_argument(
-        "-w",
-        "--whitelist",
-        metavar="<file>",
-        type=argparse.FileType("r"),
-        help="a whitelist file for known chemistry barcodes",
-    )
-    parser.add_argument(
         "-o",
         "--outfile",
         metavar="<file>",
         type=argparse.FileType("w"),
         default=sys.stdout,
-        help="output file, defaults to stdout if not given (ignored if --rank-only is active)",
+        help="output file, defaults to stdout if not given (ignored if --dry-run is active)",
     )
     parser.add_argument(
-        "--set-rank",
+        "--dry-run",
+        action="store_true",
+        help="only output discovered inflection points, without performing the actual filtering",
+    )
+
+    group_inf = parser.add_argument_group("filter by inflection point")
+    group_inf.add_argument(
+        "--no-inflection",
+        action="store_true",
+        help="do not search for an inflection point",
+    )
+    group_inf.add_argument(
+        "-l",
+        "--lower-bound",
+        metavar="<r>",
+        required=False,
+        help="search using a fixed lower bound on the count",
+    )
+    group_inf.add_argument(
+        "-u",
+        "--upper-bound",
+        metavar="<r>",
+        required=False,
+        help="search using a fixed upper bound on the count",
+    )
+
+    group_inf_d = parser.add_argument_group(
+        "fine-tune/visualise an inflection point"
+    )
+    group_inf_d.add_argument(
+        "-g",
+        "--graph",
+        action="store_true",
+        help="show a graph with the inflection point marked, requires matplotlib. will also enable --dry-run and --list-points 10.",
+    )
+    group_inf_d.add_argument(
+        "--list-points",
+        type=int,
         metavar="<n>",
+        required=False,
+        help="show multiple potential points. will also enable --dry-run.",
+    )
+    group_inf_d.add_argument(
+        "--use-predetermined-rank",
+        metavar="<r>",
         type=int,
         required=False,
-        help="use a predetermined inflection point",
+        help="use predetermined inflection point. this will disable searching, but will still filter for all ranks <= r",
     )
-    parser.add_argument(
-        "--whitelist-only",
-        action="store_true",
-        help="do not find the inflection, and only filter using the whitelist",
+
+    group_wl = parser.add_argument_group("filter by whitelist file")
+    group_wl.add_argument(
+        "-w",
+        "--whitelist",
+        metavar="<file>",
+        type=argparse.FileType("r"),
+        help="a whitelist file for known chemistry barcodes. if not given, this program will not perform whitelist filtering.",
     )
 
     args = parser.parse_args()
 
+    # configure logging
     log.basicConfig(
         stream=sys.stderr,
         format="%(message)s",
@@ -143,21 +192,21 @@ if __name__ == "__main__":
 
     # was a whitelist given?
     if args.whitelist:
-        log.debug("Found whitelist file")
+        log.debug("Found whitelist file, filtering")
         df = filter_whitelist(df, args.whitelist)
     else:
-        log.debug("No whitelist file given.")
+        log.debug("No whitelist file given, skipping")
 
-    if args.whitelist_only:
-        log.debug("Whitelist only was given, skipping inflection discovery")
+    if args.no_inflection:
+        log.debug("--no-inflection was given, skipping inflection discovery")
         df_filt = df
     else:
-        rank = args.set_rank
+        rank = args.use_predetermined_rank
         if not rank:
             rank = find_rank(df)
 
         log.info("Rank of inflection: %d", rank)
-        if args.rank_only:
+        if args.dry_run:
             sys.exit(0)
 
         log.debug("Filtering...")
