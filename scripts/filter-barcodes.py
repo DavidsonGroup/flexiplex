@@ -63,7 +63,7 @@ def write_df(df, file):
     )
 
 
-def find_rank(df):
+def find_rank(df, output_count=None):
     bounds = find_bounds(df)
 
     log.debug(
@@ -84,11 +84,12 @@ def find_rank(df):
         df_bounded, x="rank_log10", y="count_log10"
     )
 
-    smallest = df_bounded.nsmallest(10, "diff")
-    log.debug(
-        "Smallest derivatives:\n%s\n\nUse the leftmost column as the parameter to --set-rank, to filter from any of these values.\n",
-        smallest,
-    )
+    smallest = df_bounded.nsmallest(output_count or 1, "diff")
+    if output_count:
+        log.debug(
+            "Smallest derivatives:\n%s\n\nUse the leftmost column as the parameter to --use-predetermined-rank, to filter from any of these values.\n",
+            smallest.to_string(),
+        )
 
     return smallest["diff"].idxmin()
 
@@ -188,6 +189,12 @@ if __name__ == "__main__":
         level=log.DEBUG if args.verbose else log.INFO,
     )
 
+    if args.verbose:
+        log.debug("Verbose mode enabled")
+        if not args.list_points:
+            log.debug("--list-points not given, setting it to 10")
+            args.list_points = 10
+
     df = read_counts(args.filename)
 
     # was a whitelist given?
@@ -203,7 +210,7 @@ if __name__ == "__main__":
     else:
         rank = args.use_predetermined_rank
         if not rank:
-            rank = find_rank(df)
+            rank = find_rank(df, output_count=args.list_points)
 
         log.info("Rank of inflection: %d", rank)
         if args.dry_run:
