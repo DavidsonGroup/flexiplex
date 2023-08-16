@@ -286,6 +286,7 @@ if __name__ == "__main__":
         rank = args.use_predetermined_rank
         if rank:
             log.info("Using predetermined rank, not initiating discovery")
+            bounds = (0, 0)
         else:
             bounds = find_bounds(df, top=args.max_rank, bottom=args.min_rank)
             rank = find_rank(df, bounds, output_count=args.list_points)
