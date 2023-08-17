@@ -138,10 +138,10 @@ If barcodes are expected at the start and end of reads, force flexiplex not to c
 flexiplex -i false -s true -l <left flank> -k "<barcode1>,<barcode2>,<barcode3>,..." -r <right flank> -u 0
 ```
 
-flexiplex expects a left flanking sequence, so if barcodes are a fixed number of bases at the very start of a read you can add sequence to the beginnning to anchor the search. e.g.:
+flexiplex expects a left flanking sequence, so if barcodes are a fixed number of bases at the very start of a read you can add sequence to the beginnning to anchor the search. e.g. using "START" to anchor:
 
 ```
-cat file.fastq | sed 's/^/START/g' | sed 's/START@/@/g' | flexiplex -l "START" -r "" -u 0 -f 0 -k my_barcode_list.txt
+cat file.fastq | sed "/[@,+]/! s/^/START/g" | flexiplex -l "START" -r "" -u 0 -f 0 -k my_barcode_list.txt
 ```
 
 ## Assigning genotype to cells - long reads
@@ -175,7 +175,14 @@ paste -d "&" Sample_R1.fastq Sample_R2.fastq | flexiplex -l "" -r "&" [-k barcod
 
 ## Simple search
 
-To perform a simple error tolerant grep-like search of a single sequence, split the sequence between the -l and -k (or -k and -r) options. e.g.:
+To perform a simple error tolerant grep-like search of a single sequence, define the sequence with -l and the
+required edit distance with -f, then set -k "?" -r "" -e 0 -b 0 -u 0 to switch off searching for a barcode, umi or right flank. -i false ensures that the full read is returned and not trimmed (note that it may be reverse complimented still). e.g.
+```
+flexiplex -l "CACTCTTGCCTACGCCACTAGC" -f 3 -k "?" -r "" -e 0 -b 0 -u 0 -i false reads.fasta
+```
+
+
+alternatively the search sequence can be split between the -l and -k (or -k and -r) options. e.g.:
 ```
 flexiplex -i false -l "CACTCTTGCCTACGC" -k "CACTAGC" -f 3 -e 0 reads.fasta
 ```
