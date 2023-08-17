@@ -161,16 +161,17 @@ flexiplex -k barcode_list.txt reads.fasta | flexiplex -n barcode_mutation_mappin
 
 ## Assigning genotype to cells - short reads
 
-Flexiplex can be also be used on 10x short read data to search for cells with a specific target sequence such as a mutation or fusion of interest from the raw read data. This is achieved by "pasting" the two read ends together and running in a similar way as you would for long reads. e.g. To search for an NPM1 variant common in AML cancers, c.863_864insTCTG, on 10x 3' data: 
+Flexiplex can be also be used on 10x short read data to search for cells with a specific target sequence such as a mutation or fusion of interest from the raw read data. This is essentially a combination of [Simple searching](##Simple-search) and [Demultiplexing other read data by barcode](#Demultiplexing-other-read-data-by-barcode). Here you "paste" the two read ends together and run in a similar way as you would for long reads. e.g. To search for an NPM1 variant common in AML cancers, c.863_864insTCTG, on 10x 3' data: 
 
 ``` 
-paste -d "&" Sample_R1.fastq Sample_R2.fastq | flexiplex -l <left seq> -k "TCTG" -r <right seq> -u 0 -i false | flexiplex -l "" -r "&"
+paste Sample_R1.fastq Sample_R2.fastq | sed "/[@,+]/! s/^/CTACACGACGCTCTTCCGATCT/g" | flexiplex -l <left seq> -k "TCTG" -r <right seq> -u 0 -i false | flexiplex
 ```
+This prefixes the read (before the barcodes) with the 10x primer (CTACACGACGCTCTTCCGATCT), searches for the variant, then searches for the barcode immediately after the primer and returns a list of barcodes with the variant in flexiplex_barcodes_counts.txt. The read IDs can be found in flexiplex_reads_barcodes.txt
 
 In this example we assume no sequencing errors in the barcodes as the data is Illumina, however a barcode list could also be provided (to the final command) to error correct. The order of demuliplexing and searching can also be switched. e.g.:
 
 ``` 
-paste -d "&" Sample_R1.fastq Sample_R2.fastq | flexiplex -l "" -r "&" [-k barcodes_list.txt] | flexiplex -l <left seq> -k "TCTG" -r <right seq> -u 0 -i false 
+paste Sample_R1.fastq Sample_R2.fastq | sed "/[@,+]/! s/^/CTACACGACGCTCTTCCGATCT/g" | flexiplex -k barcodes_list.txt | flexiplex -l <left seq> -k "TCTG" -r <right seq> -u 0 -i false
 ```
 
 ## Simple search
