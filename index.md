@@ -34,14 +34,19 @@ The primer, polyT, list of barcodes and UMI length and maximum edit distances ca
 
 
 # Installing flexiplex
-Clone the [git repository](https://github.com/DavidsonGroup/flexiplex):
+Download from the [git repository](https://github.com/DavidsonGroup/flexiplex/releases). e.g.
 ```
-git clone https://github.com/DavidsonGroup/flexiplex.git
+wget https://github.com/DavidsonGroup/flexiplex/releases/download/Version-0.97/flexiplex-Version-0.97.tar.gz
+```
+
+Untar and unzip:
+```
+tar -xvf flexiplex-Version-0.97.tar.gz
 ```
 
 Change into the source directory and compile:
 ```
-cd flexiplex ; make
+cd flexiplex-Version-0.97 ; make
 ```
 
 You should now have a binary file called flexiplex which you can execute. Alternatively, there are precompiled binaries in the /bin subdirectory for linux and mac, which can be used if compilation fails.
