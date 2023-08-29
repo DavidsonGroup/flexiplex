@@ -1,21 +1,20 @@
 # Usage
 
 **Table of Contents**
-- [Usage](#usage)
-  - [Helpfile](#helpfile)
-  - [Installation](#installation)
-  - [Autopilot](#autopilot)
-    - [Inflection point discovery, no whitelist](#inflection-point-discovery-no-whitelist)
-    - [Whitelist filtering, no inflection point discovery](#whitelist-filtering-no-inflection-point-discovery)
-    - [Whitelist filtering and inflection point discovery](#whitelist-filtering-and-inflection-point-discovery)
-  - [Manual method](#manual-method)
-    - [Setting a minimum and maximum rank for inflection point searching](#setting-a-minimum-and-maximum-rank-for-inflection-point-searching)
-    - [Using a predetermined rank/inflection point](#using-a-predetermined-rankinflection-point)
-    - [Listing more potential inflection points](#listing-more-potential-inflection-points)
-    - [Graphing the barcodes visually](#graphing-the-barcodes-visually)
+- [Arguments](#arguments)
+- [Installation](#installation)
+- [Autopilot](#autopilot)
+  - [Inflection point discovery, no whitelist](#inflection-point-discovery-no-whitelist)
+  - [Whitelist filtering, no inflection point discovery](#whitelist-filtering-no-inflection-point-discovery)
+  - [Whitelist filtering and inflection point discovery](#whitelist-filtering-and-inflection-point-discovery)
+- [Manual method](#manual-method)
+  - [Setting a minimum and maximum rank for inflection point searching](#setting-a-minimum-and-maximum-rank-for-inflection-point-searching)
+  - [Using a predetermined rank/inflection point](#using-a-predetermined-rankinflection-point)
+  - [Listing more potential inflection points](#listing-more-potential-inflection-points)
+  - [Graphing the barcodes visually](#graphing-the-barcodes-visually)
 
 
-## Helpfile
+## Arguments
 ```
 usage: filter-barcodes.py [-h] [-v] [-o <file>] [--dry-run] [--no-inflection]
                           [-l <r>] [-u <r>] [-g] [--list-points <n>]
@@ -63,7 +62,7 @@ filter by whitelist file:
 ```
 
 ## Installation
-The script is designed to be minimal and depends on only `numpy`, `pandas`. `matplotlib` is optional, and is used for the graphing functionality.
+The script is designed to be minimal and depends on only `numpy` and `pandas`. `matplotlib` is optional, and is used for the graphing functionality.
 
 ```bash
 $ wget -O https://github.com/DavidsonGroup/flexiplex/blob/filters/scripts/filter-barcodes.py
@@ -76,7 +75,7 @@ or even, to avoid downloading,
 $ curl https://github.com/DavidsonGroup/flexiplex/blob/filters/scripts/filter-barcodes.py | python -
 ```
 
-A `requirements.txt` is provided as well for reproducibility.
+A `requirements.txt` is provided as well for reproducibility: `pip install -r requirements.txt` or `conda install --file requirements.txt`.
 
 ## Autopilot
 This script has sensible defaults which can automatically find an 'approximate' inflection point and perform whitelist filtering for you. It will never edit your files in-place and will always output to `stdout` or a given output file.
