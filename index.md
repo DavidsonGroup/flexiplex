@@ -114,15 +114,24 @@ flexiplex -f 0 reads.fastq
 The table written to standard output can help to select the number of cells. For example, it can be captured and plotted in R or similar to make a knee plot.
 
 Once the approximate number of cells is know, subset the list of barcodes by this number:
+
 ```
 head -n <number of cells> flexiplex_barcodes_counts.txt > my_barcode_list.txt
 ```
 
-Optional: You may also want to filter this list by [the possible 10x barcodes](https://kb.10xgenomics.com/hc/en-us/articles/115004506263-What-is-a-barcode-whitelist-). An example of how to do this is given below:
-
-```
-sort <(gunzip -c 3M-february-2018.txt.gz) <(cut -f1 my_barcode_list.txt) | uniq -d > my_filtered_barcode_list.txt
-```
+> **Optional**: You may also want to filter this list by [the possible 10x barcodes](https://kb.10xgenomics.com/hc/en-us/articles/115004506263-What-is-a-barcode-whitelist-). Flexiplex comes bundled with a standalone script to do this:
+> 
+> ```
+> python scripts/filter_barcodes.py --whitelist 3M-february-2018.txt --no-inflection --outfile my_filtered_barcode_list.txt my_barcode_list.txt
+> ```
+> 
+> This script also allows for the discovery and visualisation of points of inflection as another filtering step. A brief 'autopilot' mode is provided which will determine an inflection point and filter out any cells with a lower count:
+> 
+> ```
+> python scripts/filter_barcodes.py --whitelist 3M-february-2018.txt --outfile my_filtered_barcode_list.txt my_barcode_list.txt
+> ```
+> 
+> **[The usage guide](https://github.com/DavidsonGroup/flexiplex/tree/main/scripts/usage.md) explains how to further use `filter-barcodes.py` to visualise and fine-tune the inflection point result.**
 
 Then use this list to assign barcodes to reads:
 ```
