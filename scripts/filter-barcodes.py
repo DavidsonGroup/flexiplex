@@ -6,20 +6,52 @@ import logging as log
 import sys
 
 
-def find_bounds(df, col="count", top=None, bottom=None):
+def find_bounds(df, top=None, bottom=None):
+    """
+    Find appropriate bounds to search for the inflection point within, with a
+    manual override as well.
+    Defaults to using [50, c_{0.95}] where c_{x} refers to the xth quantile.
+
+    Parameters:
+        df (dataframe): dataframe to search for; must contain the `rank` and
+                        `count` columns
+        top (int): manual override for the lowest rank to be contained
+        bottom (int): manual override for the highest rank to be contained
+
+    Returns:
+        (int, int): the lower and upper rank bounds
+    """
+
+    # column to be used when determining quantiles
+    col = "count"
+    quantile = 0.95
+
+    print(df)
+
     if bottom is None:
         log.debug("Setting lower bound to the 0.95 quantile")
-        low = int(df[col].quantile(0.95))
+
+        # interpolation = "lower" will guarantee that the result is valid
+        low_cnt = df[col].quantile(quantile, interpolation="lower")
+
+        # select the index of the row with low_cnt as the count
+        low = int(df[df[col] == low_cnt].iloc[[0]].index[0])
+
+        # get the closest-matching rank
+        # low = df["count"].
+
+        print(low)
+        raise
     else:
         low = int(df[col][top])
         log.debug("The rank of %d corresponds to a count of %d", top, low)
 
     if top is None:
         log.debug("Setting upper bound to the count of read rank #50")
-        high = int(df[col][50])
+        high = 50
     else:
-        high = int(df[col][bottom])
-        log.debug("The rank of %d corresponds to a count of %d", bottom, high)
+        high = bottom
+        log.debug("The rank of %d", bottom, high)
 
     log.debug("Bounds interval (%d, %d)", low, high)
     return (low, high)
@@ -47,7 +79,7 @@ def filter_whitelist(df, whitelist_file):
     percent = diff / rows_orig * 100
 
     log.info(
-        "Filtered with whitelist, removed %d out of %d barcodes (%d%% of all reads)",
+        "Filtered with whitelist, removed %d out of %d barcodes (%d%% of all barcodes)",
         diff,
         rows_orig,
         percent,
@@ -58,15 +90,6 @@ def filter_whitelist(df, whitelist_file):
 
 def show_graph(df, bounds, rank):
     import matplotlib.pyplot as plt
-
-    # df.plot(
-    #     x=df.index,
-    #     y="count",
-    #     logx=True,
-    #     logy=True,
-    #     kind="scatter",
-    #     use_index=True,
-    # )
 
     count = df.at[rank, "count"]
 
@@ -96,13 +119,15 @@ def show_graph(df, bounds, rank):
 
     plt.xscale("log", base=10)
     plt.yscale("log", base=10)
+    plt.ylabel("count")
+
     plt.xlabel(
         """rank
 
 The light pink shading represents the search bounds of the inflection point.
 The dotted red lines represent the rank and count of the discovered point."""
     )
-    plt.ylabel("count")
+    # required for the bottom text to be readable
     plt.subplots_adjust(bottom=0.3)
 
     log.info(
@@ -152,7 +177,7 @@ def find_rank(df, bounds, output_count=None):
     smallest = df_bounded.nsmallest(output_count or 1, "diff")
     if output_count:
         log.info(
-            "\n%d smallest derivatives:\n%s\n\nOnce an appropriate rank cutoff <r> has been determined, use the leftmost column (rank) as the parameter:\n    --use-predetermined-rank <r>\nThis will select all the ranks from 1 to <r>.\n",
+            "\n%d smallest derivatives:\n%s\n\nOnce an appropriate rank cutoff <r> has been determined, use the leftmost column (rank) as the parameter:\n    --use-predetermined-rank <r>\nThis will produce a list of all valid barcodes using those from ranks 1 to <r>.\n",
             output_count,
             smallest.to_string(),
         )
