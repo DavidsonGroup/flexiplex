@@ -13,8 +13,8 @@ def find_bounds(df, min_=None, max_=None):
     Defaults to using [50, c_{0.95}] where c_{x} refers to the xth quantile.
 
     Parameters:
-        df (dataframe): dataframe to search for; must contain the `rank` and
-                        `count` columns
+        df (dataframe): dataframe to search for; must contain the `rank` index
+                        and `count` column
         min_ (int): manual override for the lowest rank to be contained
         max_ (int): manual override for the highest rank to be contained
 
@@ -52,7 +52,11 @@ def find_bounds(df, min_=None, max_=None):
         min_row[col],
     )
 
-    assert min_ < max_
+    if not min_ < max_:
+        raise ValueError(
+            "The lower bound must be greater than the upper bound. By default, u = 50"
+        )
+
     return (min_, max_)
 
 
