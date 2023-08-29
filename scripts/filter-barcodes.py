@@ -61,11 +61,29 @@ def find_bounds(df, min_=None, max_=None):
 
 
 def n_derivative(df, x, y):
+    # calculates the rolling mean of the numerical derivative
+    window_size = 9  # must be odd
+    half_size = window_size // 2
+    convolution = np.ones(window_size)
+
+    if not window_size % 2:
+        raise ValueError("window_size must be odd")
+
     diff = np.diff(df[y], 1) / np.diff(df[x], 1)
 
-    # requires last element to be a NaN, otherwise this column has
-    # length n-1
-    return np.append(diff, np.NaN)
+    diff_orig = diff.copy()
+
+    # rolling average of these differences
+    rolling = np.convolve(diff, convolution, "valid") / window_size
+
+    return np.concatenate(
+        (
+            diff_orig[:half_size],
+            rolling,
+            diff_orig[-half_size:],
+            [np.NaN],
+        )
+    )
 
 
 def filter_whitelist(df, whitelist_file):
