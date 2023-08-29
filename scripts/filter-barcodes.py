@@ -6,7 +6,7 @@ import logging as log
 import sys
 
 
-def find_bounds(df, top=None, bottom=None):
+def find_bounds(df, min_=None, max_=None):
     """
     Find appropriate bounds to search for the inflection point within, with a
     manual override as well.
@@ -15,8 +15,8 @@ def find_bounds(df, top=None, bottom=None):
     Parameters:
         df (dataframe): dataframe to search for; must contain the `rank` and
                         `count` columns
-        top (int): manual override for the lowest rank to be contained
-        bottom (int): manual override for the highest rank to be contained
+        min_ (int): manual override for the lowest rank to be contained
+        max_ (int): manual override for the highest rank to be contained
 
     Returns:
         (int, int): the lower and upper rank bounds
@@ -26,35 +26,34 @@ def find_bounds(df, top=None, bottom=None):
     col = "count"
     quantile = 0.95
 
-    print(df)
-
-    if bottom is None:
+    if max_ is None:
         log.debug("Setting lower bound to the 0.95 quantile")
 
         # interpolation = "lower" will guarantee that the result is valid
-        low_cnt = df[col].quantile(quantile, interpolation="lower")
+        max_cnt = df[col].quantile(quantile, interpolation="lower")
 
         # select the index of the row with low_cnt as the count
-        low = int(df[df[col] == low_cnt].iloc[[0]].index[0])
+        max_ = int(df[df[col] == max_cnt].iloc[[0]].index[0])
 
-        # get the closest-matching rank
-        # low = df["count"].
-
-        print(low)
-        raise
-    else:
-        low = int(df[col][top])
-        log.debug("The rank of %d corresponds to a count of %d", top, low)
-
-    if top is None:
+    if min_ is None:
         log.debug("Setting upper bound to the count of read rank #50")
-        high = 50
-    else:
-        high = bottom
-        log.debug("The rank of %d", bottom, high)
+        min_ = 50
 
-    log.debug("Bounds interval (%d, %d)", low, high)
-    return (low, high)
+    min_row = df[df.index == min_].iloc[[0]]
+    max_row = df[df.index == max_].iloc[[0]]
+
+    log.debug(
+        "Bounds interval: ranks [%d, %d] -> counts [%d, %d]",
+        min_,
+        max_,
+        # the counts should be flipped in magnitude i.e.
+        # the min row -> max count
+        max_row[col],
+        min_row[col],
+    )
+
+    assert min_ < max_
+    return (min_, max_)
 
 
 def n_derivative(df, x, y):
@@ -95,9 +94,9 @@ def show_graph(df, bounds, rank):
 
     df.drop_duplicates(subset="count", keep="first", inplace=True)
 
-    plt.axhspan(
-        ymin=bounds[0],
-        ymax=bounds[1],
+    plt.axvspan(
+        xmin=bounds[0],
+        xmax=bounds[1],
         color="mistyrose",
         zorder=1,
     )
@@ -156,14 +155,8 @@ def write_df(df, file):
 
 
 def find_rank(df, bounds, output_count=None):
-    log.debug(
-        "Removing all barcodes with count value not within the interval %s",
-        bounds,
-    )
-
-    df_bounded = df[
-        (df["count"] > bounds[0]) & (df["count"] < bounds[1])
-    ].copy()
+    # remove ranks not within the bounds
+    df_bounded = df[(df.index >= bounds[0]) & (df.index <= bounds[1])].copy()
 
     df_bounded.drop_duplicates(subset="count", keep="first", inplace=True)
 
@@ -313,7 +306,7 @@ if __name__ == "__main__":
             log.info("Using predetermined rank, not initiating discovery")
             bounds = (0, 0)
         else:
-            bounds = find_bounds(df, top=args.max_rank, bottom=args.min_rank)
+            bounds = find_bounds(df, max_=args.max_rank, min_=args.min_rank)
             rank = find_rank(df, bounds, output_count=args.list_points)
 
         log.info("Rank of inflection point: %d", rank)
