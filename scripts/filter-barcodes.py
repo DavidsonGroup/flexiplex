@@ -183,6 +183,22 @@ def read_counts(file):
 
     # convert count col to ints
     df["count"] = df["count"].astype(int)
+
+    return df
+
+
+def add_rank_index(df):
+    """
+    Sorts the data and adds a rank index where a rank of #1 corresponds
+    to the highest count.
+
+    Parameters:
+        df (DataFrame): the data
+
+    Returns:
+        The original dataframe, but sorted and with a rank index
+    """
+
     df.sort_values(by="count")
 
     # sort by count and add to a rank column
@@ -452,6 +468,8 @@ if __name__ == "__main__":
         df = filter_whitelist(df, args.whitelist)
     else:
         log.debug("No whitelist file given, skipping")
+
+    add_rank_index(df)
 
     if args.no_inflection:
         log.debug("--no-inflection was given, skipping inflection discovery")
