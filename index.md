@@ -193,7 +193,7 @@ paste Sample_R1.fastq Sample_R2.fastq | sed "/[@,+]/! s/^/CTACACGACGCTCTTCCGATCT
 To perform a simple error tolerant grep-like search of a single sequence, define the sequence with -l and the
 required edit distance with -f, then set -k "?" -r "" -e 0 -b 0 -u 0 to switch off searching for a barcode, umi or right flank. -i false ensures that the full read is returned and not trimmed (note that it may be reverse complimented still). e.g.
 ```
-flexiplex -l "CACTCTTGCCTACGCCACTAGC" -f 3 -k "?" -r "" -e 0 -b 0 -u 0 -i false reads.fasta
+flexiplex -l "CACTCTTGCCTACGCCACTAGC" -f 3 -k "?" -r "" -b 0 -u 0 -i false reads.fasta
 ```
 
 
