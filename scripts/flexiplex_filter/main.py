@@ -322,7 +322,7 @@ def parse_args():
 
     # fmt: off
     parser = argparse.ArgumentParser(
-        prog="FLEXIPLEX-FILTER",
+        prog="flexiplex-filter",
         description=(
             "finds the inflection point when demultiplexing using flexiplex"
         ),
@@ -447,7 +447,7 @@ def cli():
         level=log.DEBUG if args.verbose else log.INFO,
     )
 
-    log.info("FLEXIPLEX-FILTER 0.96.2")
+    log.info("FLEXIPLEX-FILTER 0.97")
     if args.filename == sys.stdin:
         log.info("No filename given... getting reads from stdin...")
 
