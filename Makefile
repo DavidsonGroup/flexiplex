@@ -1,17 +1,21 @@
-CC=g++
+CXX?=g++
 
-all: flexiplex filter
+# set DIR to /usr/local/bin if not given through env
+DIR?=/usr/local/bin
+PYTHON?=python3
+
+all: flexiplex
 
 flexiplex: flexiplex.c++ 
-	${CC} $^ -Ofast -pthread -std=c++11 -o $@ edlib-1.2.7/edlib.cpp -I edlib-1.2.7/
+	${CXX} $^ -Ofast -pthread -std=c++11 -o $@ edlib-1.2.7/edlib.cpp -I edlib-1.2.7/ ${CFLAGS}
 
 clean:
 	rm flexiplex 
 
 install:
-	cp flexiplex /usr/local/bin/flexiplex
-	python3 -m pip install scripts/
+	cp flexiplex ${DIR}
+	${PYTHON} -m pip install scripts/
 
 uninstall:
-	rm /usr/local/bin/flexiplex
-	python3 -m pip list 2>/dev/null | grep -Fq flexiplex-filter && python3 -m pip uninstall -y flexiplex_filter
+	rm ${DIR}/flexiplex
+	${PYTHON} -m pip list 2>/dev/null | grep -Fq flexiplex-filter && python3 -m pip uninstall -y flexiplex_filter
