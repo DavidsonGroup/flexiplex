@@ -447,6 +447,10 @@ def cli():
         level=log.DEBUG if args.verbose else log.INFO,
     )
 
+    log.info("FLEXIPLEX-FILTER 0.96.2")
+    if args.filename == sys.stdin:
+        log.info("No filename given... getting reads from stdin...")
+
     if args.list_points and not args.dry_run:
         args.dry_run = True
         log.info("Setting --dry-run as --list-points was given")
