@@ -3,3 +3,4 @@ scripts/build/
 scripts/flexiplex_filter.egg-info
 
 __pycache__/
+flexiplex

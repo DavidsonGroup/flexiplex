@@ -322,7 +322,7 @@ def parse_args():
 
     # fmt: off
     parser = argparse.ArgumentParser(
-        prog="filter-barcodes.py",
+        prog="FLEXIPLEX-FILTER",
         description=(
             "finds the inflection point when demultiplexing using flexiplex"
         ),
