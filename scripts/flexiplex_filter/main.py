@@ -436,7 +436,7 @@ def parse_args():
     return args
 
 
-if __name__ == "__main__":
+def cli():
     # set up parser
     args = parse_args()
 
@@ -495,3 +495,7 @@ if __name__ == "__main__":
         df_filt = df[df.index <= rank]
 
     write_df(df_filt, args.outfile)
+
+
+if __name__ == "__main__":
+    cli()
