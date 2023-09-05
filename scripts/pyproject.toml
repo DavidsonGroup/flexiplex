@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "flexiplex-filter"
-version = "1.0.0"
+version = "0.97"
 authors = [{name="Davidson Group", email="olliecheng@outlook.com" }]
 description = "Filter barcodes from flexiplex by whitelist and inflection point"
 readme = "USAGE.md"
 dependencies = ["cachetools","requests", "matplotlib", "numpy", "pandas"]
-requires-python = ">=3.9"
+requires-python = ">=3.7.17"
 
 [tool.setuptools]
 packages = ["flexiplex_filter"]
