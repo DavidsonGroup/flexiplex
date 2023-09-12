@@ -16,7 +16,7 @@ jobs:
           path: 'src'
       - uses: conda-incubator/setup-miniconda@v2
         with:
-          miniconda-version: "latest"
+          miniforge-version: "latest"
           python-version: 3.8
           use-only-tar-bz2: true # for caching
       - name: Install conda-build

@@ -32,5 +32,12 @@ about:
   home: https://github.com/DavidsonGroup/flexiplex/
   license: MIT License
   summary: 'flexiplex: the flexible demultiplexer'
+  description: |
+    Flexiplex is a fast and versatile sequence searching and demultiplexing tool 
+    for omics data. For more information, see the accompanying bioRxiv preprint
+    "Davidson et al. Flexiplex: A versatile demultiplexer and search tool for omics data."
   license_family: MIT
 
+extra:
+  identifiers:
+    - doi: 10.1101/2023.08.21.554084 # bioRxiv preprint
