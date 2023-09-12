@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flexiplex-filter"
+version = "0.97"
+authors = [{name="Davidson Group", email="olliecheng@outlook.com" }]
+description = "Filter barcodes from flexiplex by whitelist and inflection point"
+readme = "USAGE.md"
+dependencies = ["cachetools","requests", "matplotlib", "numpy", "pandas"]
+requires-python = ">=3.7.17"
+
+[tool.setuptools]
+packages = ["flexiplex_filter"]
+
+[project.scripts]
+flexiplex-filter = "flexiplex_filter.main:cli"
+
+[project.urls]
+"Homepage" = "https://github.com/DavidsonGroup/flexiplex"
+"Bug Tracker" = "https://github.com/DavidsonGroup/flexiplex/issues"
+

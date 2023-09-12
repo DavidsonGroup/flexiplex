@@ -1,4 +1,4 @@
-// Copyright 2022 Nadia Davidson 
+// Copyright 2023 Nadia Davidson 
 // This program is distributed under the MIT License.
 // We also ask that you cite this software in publications
 // where you made use of it for any part of the data analysis.
@@ -428,7 +428,7 @@ int main(int argc, char **argv){
   ifstream file;
   string line;
 
-  while((c =  getopt(argc, argv, "k:i:l:r:b:u:e:f:n:s:h:p:")) != EOF){
+  while((c =  getopt(argc, argv, "k:i:l:r:b:u:e:f:n:s:hp:")) != EOF){
     switch(c){
     case 'k': { //k=list of known barcodes
       string file_name(optarg);
@@ -507,7 +507,7 @@ int main(int argc, char **argv){
     }
     case 'h':{
       print_usage();
-      exit(1);
+      exit(0);
     }
     case 'n':{
       out_filename_prefix=optarg;

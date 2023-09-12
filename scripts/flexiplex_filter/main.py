@@ -322,7 +322,7 @@ def parse_args():
 
     # fmt: off
     parser = argparse.ArgumentParser(
-        prog="filter-barcodes.py",
+        prog="flexiplex-filter",
         description=(
             "finds the inflection point when demultiplexing using flexiplex"
         ),
@@ -436,7 +436,7 @@ def parse_args():
     return args
 
 
-if __name__ == "__main__":
+def cli():
     # set up parser
     args = parse_args()
 
@@ -446,6 +446,10 @@ if __name__ == "__main__":
         format="%(message)s",
         level=log.DEBUG if args.verbose else log.INFO,
     )
+
+    log.info("FLEXIPLEX-FILTER 0.97")
+    if args.filename == sys.stdin:
+        log.info("No filename given... getting reads from stdin...")
 
     if args.list_points and not args.dry_run:
         args.dry_run = True
@@ -495,3 +499,7 @@ if __name__ == "__main__":
         df_filt = df[df.index <= rank]
 
     write_df(df_filt, args.outfile)
+
+
+if __name__ == "__main__":
+    cli()
