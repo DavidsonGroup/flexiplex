@@ -39,14 +39,21 @@ void print_usage(){
   cerr << "                     including flanking sequenence and split read if multiple\n";
   cerr << "                     barcodes found (default: true).\n";
   cerr << "     -s true/false   Sort reads into separate files by barcode (default: false)\n";
-  cerr << "     -l left     Left flank sequence to search for (default: CTACACGACGCTCTTCCGATCT).\n";
-  cerr << "     -r right    Right flank sequence to search for (default: TTTTTTTTT).\n";
   cerr << "     -n prefix   Prefix for output filenames.\n";
-  cerr << "     -b N   Barcode length (default: 16).\n";
-  cerr << "     -u N   UMI length (default: 12).\n";
   cerr << "     -e N   Maximum edit distance to barcode (default 2).\n";
   cerr << "     -f N   Maximum edit distance to primer+polyT (default 8).\n";
   cerr << "     -p N   Number of threads (default: 1).\n";
+  cerr << "  Specifying adaptor / barcode pattern: \n";
+  cerr << "     -x sequence Append a sequence to the barcode pattern to search for\n";
+  cerr << "     -b sequence Append the barcode sequence to search for\n";
+  cerr << "     -u sequence Append the UMI sequence to search for\n";
+  cerr << "     When no search pattern x,b,u option is provided, the following default pattern is used: \n";
+  cerr << "          primer: CTACACGACGCTCTTCCGATCT\n";
+  cerr << "          barcode: NNNNNNNNNNNNNNNN\n";
+  cerr << "          polyT: TTTTTTTTT\n";
+  cerr << "          UMI: NNNNNNNNNNNN\n";
+  cerr << "     which is the same as providing: \n";
+   cerr << "         -x CTACACGACGCTCTTCCGATCT -b NNNNNNNNNNNNNNNN -u NNNNNNNNNNNN -x TTTTTTTTT\n";
   cerr << "     -h     Print this usage information.\n";
   cerr << endl;
 }
@@ -473,7 +480,7 @@ int main(int argc, char **argv){
   ifstream file;
   string line;
 
-  while((c =  getopt(argc, argv, "k:i:l:r:b:u:e:f:n:s:hp:")) != EOF){
+  while((c =  getopt(argc, argv, "k:i:b:u:x:e:f:n:s:hp:")) != EOF){
     switch(c){
     case 'k': { //k=list of known barcodes
       string file_name(optarg);
@@ -520,15 +527,9 @@ int main(int argc, char **argv){
       params+=2;
       break;
     }
-    case 'l':{
-      search_pattern.push_back(std::make_pair("Primer", optarg));
-      cerr << "Setting primer to search for: " << optarg << "\n";
-      params+=2;
-      break;
-    }
-    case 'r':{
-      search_pattern.push_back(std::make_pair("PolyT", optarg));
-      cerr << "Setting polyT to search for: " << optarg << "\n";
+    case 'x':{
+      search_pattern.push_back(std::make_pair("Unnamed Seq", optarg));
+      cerr << "Adding unnamed sequence to search for: " << optarg << "\n";
       params+=2;
       break;
     }
