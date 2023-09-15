@@ -201,7 +201,8 @@ std::vector<long unsigned int> subpattern_ends;
   std::partial_sum(subpattern_lengths.begin(), subpattern_lengths.end(), subpattern_ends.begin());
 
   vector<int> read_to_subpatterns;
-  read_to_subpatterns.reserve(subpattern_ends.size());
+  read_to_subpatterns.reserve(subpattern_ends.size() + 1);
+  read_to_subpatterns.emplace_back(barcode.flank_start);
 
   // initialise pointers
   int i_read = barcode.flank_start;
@@ -258,14 +259,10 @@ std::vector<long unsigned int> subpattern_ends;
   //if not checking against known list of barcodes, return sequence after the primer
   //also check for a perfect match straight up as this will save computer later.
   // 
-  // read_to_subpatterns[subpattern_index - 1] gives start of subpattern in the read
-  // TODO: prepend barcode.flank_start to read_to_subpatterns and remove if cases in
-  // the following indexing expressions
+  // read_to_subpatterns[subpattern_index] gives start of subpattern in the read
   std::string exact_bc = seq.substr(
-      read_to_subpatterns[bc_index == 0 ? barcode.flank_start : (bc_index - 1)],
-      read_to_subpatterns[bc_index] -
-          read_to_subpatterns[bc_index == 0 ? barcode.flank_start
-                                            : (bc_index - 1)]);
+      read_to_subpatterns[bc_index],
+      search_pattern[bc_index].second.length());
 if(known_barcodes->size()==0 || (known_barcodes->find(exact_bc) != known_barcodes->end())){ 
     barcode.barcode=exact_bc;
     barcode.editd=0;
@@ -274,8 +271,7 @@ if(known_barcodes->size()==0 || (known_barcodes->find(exact_bc) != known_barcode
       barcode.umi = "";
     } else {
       barcode.umi =
-          seq.substr(read_to_subpatterns[umi_index == 0 ? barcode.flank_start
-                                                        : (umi_index - 1)],
+          seq.substr(read_to_subpatterns[umi_index],
                      search_pattern[umi_index].second.length());
     }
 return(barcode);
@@ -283,9 +279,7 @@ return(barcode);
   
   // otherwise widen our search space and the look for matches with errors
    std::string barcode_seq =
-      seq.substr(read_to_subpatterns[bc_index == 0 ? barcode.flank_start
-                                                   : (bc_index - 1)] -
-                     OFFSET,
+      seq.substr(read_to_subpatterns[bc_index] - OFFSET,
                  search_pattern[bc_index].second.length() + 2 * OFFSET);
  
   //iterate over all the known barcodes, checking each sequentially
@@ -302,9 +296,26 @@ return(barcode);
       barcode.barcode=*known_barcodes_itr;
       if (umi_index == -1) {
         barcode.umi = "";
-      } else {
+      } else if (umi_index == bc_index + 1) {
+        // read_to_subpatterns[bc_index] - OFFSET: start of barcode_seq
+        //                                       + endDistance: end of barcode
+        //                                                    i.e. start of UMI
       barcode.umi =
-        seq.substr(read_to_subpatterns[0] - OFFSET + endDistance,
+        seq.substr(read_to_subpatterns[bc_index] - OFFSET + endDistance,
+                   search_pattern[umi_index].second.length()); // assumes no error in UMI seq.
+    } else if (umi_index == bc_index - 1) {
+      // Use the start of BC according to edit_distance(barcode_seq, ...) and go backwords
+      // read_to_subpatterns[bc_index] - OFFSET + endDistance - search_pattern[bc_index].second.length():
+      //   start of BC
+      barcode.umi =
+        seq.substr(read_to_subpatterns[bc_index] - OFFSET + endDistance 
+                   - search_pattern[bc_index].second.length() 
+                   - search_pattern[umi_index].second.length(),
+                   search_pattern[umi_index].second.length());
+    }  else {
+      // BC and UMI not next to eachother, grab UMI according to aligment
+      barcode.umi =
+        seq.substr(read_to_subpatterns[umi_index],
                    search_pattern[umi_index].second.length()); // assumes no error in UMI seq.
     }
 if(editDistance==0){ //if perfect match is found we're done.
