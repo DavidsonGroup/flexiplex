@@ -158,6 +158,7 @@ Barcode get_barcode(string & seq,
   barcode.editd=100; barcode.flank_editd=100; barcode.unambiguous = false;
 
   //initialise edlib configuration
+  // Use IUPAC codes
   EdlibEqualityPair additionalEqualities[28] = {
     {'R', 'A'}, {'R', 'G'},
     {'K', 'G'}, {'K', 'T'},
@@ -173,12 +174,13 @@ Barcode get_barcode(string & seq,
   };
   EdlibAlignConfig edlibConf = {flank_max_editd, EDLIB_MODE_HW, EDLIB_TASK_PATH, additionalEqualities, 28};
 
-  //search for primer and ployT (barcode and umi as wildcards)
+  // concatenate patterns in search_pattern in insertion order
   std::string search_string;
   for (const auto &pair : search_pattern) {
     search_string += pair.second;
   }
 
+  //search for the concatenated pattern
   EdlibAlignResult result = edlibAlign(search_string.c_str(), search_string.length(), seq.c_str(), seq.length(), edlibConf);
   if(result.status != EDLIB_STATUS_OK | result.numLocations==0 ){
     edlibFreeAlignResult(result);
@@ -227,9 +229,10 @@ std::vector<long unsigned int> subpattern_ends;
 
   edlibFreeAlignResult(result);
   
-  //if not checking against known list of barcodes, return sequence after the primer
-  //also check for a perfect match straight up as this will save computer later.
 
+  // Work out the index of BC and UMI in the pattern
+  // TODO: Should this be done in main to be more efficient?
+  // TODO: Handle edge cases where BC / UMI is not speficied in the pattern
   int bc_index = -1, umi_index = -1;
   auto it_pattern =
       std::find_if(search_pattern.begin(), search_pattern.end(),
@@ -252,6 +255,12 @@ std::vector<long unsigned int> subpattern_ends;
     // error
   }
 
+  //if not checking against known list of barcodes, return sequence after the primer
+  //also check for a perfect match straight up as this will save computer later.
+  // 
+  // read_to_subpatterns[subpattern_index - 1] gives start of subpattern in the read
+  // TODO: prepend barcode.flank_start to read_to_subpatterns and remove if cases in
+  // the following indexing expressions
   std::string exact_bc = seq.substr(
       read_to_subpatterns[bc_index == 0 ? barcode.flank_start : (bc_index - 1)],
       read_to_subpatterns[bc_index] -
@@ -527,6 +536,7 @@ int main(int argc, char **argv){
       params+=2;
       break;
     }
+    // x, u, b arguments inserts subpatterns to search_pattern
     case 'x':{
       search_pattern.push_back(std::make_pair("Unnamed Seq", optarg));
       cerr << "Adding unnamed sequence to search for: " << optarg << "\n";
@@ -580,6 +590,7 @@ int main(int argc, char **argv){
     }
   }
   
+  // default case when no x, u, b is speficied
   if (search_pattern.empty()) {
     search_pattern = {
       {"primer", "CTACACGACGCTCTTCCGATCT"},
