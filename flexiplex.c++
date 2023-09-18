@@ -23,7 +23,7 @@
 
 using namespace std;
 
-const static string VERSION="0.97";
+const static string VERSION="0.97.1";
 
 // the help information which is printed when a user puts in the wrong
 // combination of command line options.
