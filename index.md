@@ -34,22 +34,39 @@ The primer, polyT, list of barcodes and UMI length and maximum edit distances ca
 
 
 # Installing flexiplex
-Download from the [git repository](https://github.com/DavidsonGroup/flexiplex/releases). e.g.
-```
-wget https://github.com/DavidsonGroup/flexiplex/releases/download/Version-0.97/flexiplex-Version-0.97.tar.gz
+### Precompiled binaries
+Pre-compiled binaries are available at precompiled binaries in the [/bin subdirectory](https://github.com/DavidsonGroup/flexiplex/releases) for Linux (x64) and Mac (Apple Silicon).
+
+### Compiling from source
+```sh
+# download from GitHub
+wget https://github.com/DavidsonGroup/flexiplex/releases/download/Version-x.y.z/flexiplex-Version-x.y.z.tar.gz
+
+# untar and unzip
+tar -xvf flexiplex-Version-x.y.z.tar.gz
+
+# change into source directory, compile, and install
+cd flexiplex-Version-x.y.z
+make
 ```
 
-Untar and unzip:
-```
-tar -xvf flexiplex-Version-0.97.tar.gz
-```
+The `flexiplex` binary will now be available in the `flexiplex-Version-x.y.z` folder.
 
-Change into the source directory and compile:
-```
-cd flexiplex-Version-0.97 ; make
-```
+Alternatively, you can copy the binary to `/usr/local/bin` with `make install`.
 
-You should now have a binary file called flexiplex which you can execute. Alternatively, there are precompiled binaries in the /bin subdirectory for linux and mac, which can be used if compilation fails.
+
+
+### Conda
+Alternatively, on Linux and non-Apple Silicon Macs, `conda` (or mamba) can be used to install flexiplex and [flexiplex-filter](https://github.com/DavidsonGroup/flexiplex/blob/main/scripts/usage.md) together.
+
+```sh
+# optional, but recommended: install into a separate environment
+conda create -c bioconda -c conda-forge --name flexiplex flexiplex
+conda activate flexiplex
+
+# alternatively, install directly into base
+conda install -c bioconda -c conda-forge flexiplex
+```
 
 To see usage information, run 
 ```
