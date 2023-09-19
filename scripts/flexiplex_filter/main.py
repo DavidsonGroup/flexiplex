@@ -447,7 +447,7 @@ def cli():
         level=log.DEBUG if args.verbose else log.INFO,
     )
 
-    log.info("FLEXIPLEX-FILTER 0.97")
+    log.info("FLEXIPLEX-FILTER 0.97.1")
     if args.filename == sys.stdin:
         log.info("No filename given... getting reads from stdin...")
 
