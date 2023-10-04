@@ -49,11 +49,11 @@ void print_usage(){
   cerr << "     -u sequence Append the UMI sequence to search for\n";
   cerr << "     When no search pattern x,b,u option is provided, the following default pattern is used: \n";
   cerr << "          primer: CTACACGACGCTCTTCCGATCT\n";
-  cerr << "          barcode: NNNNNNNNNNNNNNNN\n";
+  cerr << "          barcode: ????????????????\n";
   cerr << "          polyT: TTTTTTTTT\n";
-  cerr << "          UMI: NNNNNNNNNNNN\n";
+  cerr << "          UMI: ????????????\n";
   cerr << "     which is the same as providing: \n";
-   cerr << "         -x CTACACGACGCTCTTCCGATCT -b NNNNNNNNNNNNNNNN -u NNNNNNNNNNNN -x TTTTTTTTT\n";
+   cerr << "         -x CTACACGACGCTCTTCCGATCT -b ???????????????? -u ???????????? -x TTTTTTTTT\n";
   cerr << "     -h     Print this usage information.\n";
   cerr << endl;
 }
@@ -168,7 +168,7 @@ Barcode get_barcode(string & seq,
     {'W', 'A'}, {'W', 'T'},
     {'B', 'C'}, {'B', 'G'}, {'B', 'T'},
     {'H', 'A'}, {'H', 'C'}, {'H', 'T'},
-    {'N', 'A'}, {'N', 'C'}, {'N', 'G'}, {'N', 'T'},
+    {'?', 'A'}, {'?', 'C'}, {'?', 'G'}, {'?', 'T'},
     {'D', 'A'}, {'D', 'G'}, {'D', 'T'},
     {'V', 'A'}, {'V', 'C'}, {'V', 'G'}
   };
@@ -605,8 +605,8 @@ int main(int argc, char **argv){
   if (search_pattern.empty()) {
     search_pattern = {
       {"primer", "CTACACGACGCTCTTCCGATCT"},
-      {"BC", std::string(16, 'N')},
-      {"UMI", std::string(12, 'N')},
+      {"BC", std::string(16, '?')},
+      {"UMI", std::string(12, '?')},
       {"polyA", std::string(9, 'T')}
     };
   } else {
