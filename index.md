@@ -18,7 +18,7 @@
     - [Table of the number of barcode at each barcode frequency](#table-of-the-number-of-barcode-at-each-barcode-frequency)
 - [Tips to speed up flexiplex](#tips-to-speed-up-flexiplex)
 - [Support or Contact](#support-or-contact)
-
+- [Publication/Citation](https://www.biorxiv.org/content/10.1101/2023.08.21.554084v1)
 
 # What does flexiplex do?
 
