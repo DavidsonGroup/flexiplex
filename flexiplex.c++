@@ -39,14 +39,21 @@ void print_usage(){
   cerr << "                     including flanking sequenence and split read if multiple\n";
   cerr << "                     barcodes found (default: true).\n";
   cerr << "     -s true/false   Sort reads into separate files by barcode (default: false)\n";
-  cerr << "     -l left     Left flank sequence to search for (default: CTACACGACGCTCTTCCGATCT).\n";
-  cerr << "     -r right    Right flank sequence to search for (default: TTTTTTTTT).\n";
   cerr << "     -n prefix   Prefix for output filenames.\n";
-  cerr << "     -b N   Barcode length (default: 16).\n";
-  cerr << "     -u N   UMI length (default: 12).\n";
   cerr << "     -e N   Maximum edit distance to barcode (default 2).\n";
   cerr << "     -f N   Maximum edit distance to primer+polyT (default 8).\n";
   cerr << "     -p N   Number of threads (default: 1).\n";
+  cerr << "  Specifying adaptor / barcode pattern: \n";
+  cerr << "     -x sequence Append a sequence to the barcode pattern to search for\n";
+  cerr << "     -b sequence Append the barcode sequence to search for\n";
+  cerr << "     -u sequence Append the UMI sequence to search for\n";
+  cerr << "     When no search pattern x,b,u option is provided, the following default pattern is used: \n";
+  cerr << "          primer: CTACACGACGCTCTTCCGATCT\n";
+  cerr << "          barcode: ????????????????\n";
+  cerr << "          polyT: TTTTTTTTT\n";
+  cerr << "          UMI: ????????????\n";
+  cerr << "     which is the same as providing: \n";
+   cerr << "         -x CTACACGACGCTCTTCCGATCT -b ???????????????? -u ???????????? -x TTTTTTTTT\n";
   cerr << "     -h     Print this usage information.\n";
   cerr << endl;
 }
@@ -68,14 +75,6 @@ void reverse_compliment(string & seq){
    reverse(seq.begin(),seq.end());
    transform(seq.begin(),seq.end(),seq.begin(),compliment);
 }
-
-//Holds the search string patterns
-struct SearchSeq {
-  string primer;
-  string polyA;
-  string umi_seq;
-  string temp_barcode;
-} search_pattern ;
 
 //Holds the found barcode and associated information 
 struct Barcode {
@@ -149,8 +148,8 @@ unsigned int edit_distance(const std::string& s1, const std::string& s2, unsigne
 Barcode get_barcode(string & seq,
 		    unordered_set<string> *known_barcodes,
 		    int flank_max_editd,
-		    int barcode_max_editd){//,
-  //		    SearchSeq & ss){
+		    int barcode_max_editd,
+        const std::vector<std::pair<std::string, std::string>> &search_pattern) {
   
   const int OFFSET=5; //wiggle room in bases of the expected barcode start site to search.
 
@@ -159,15 +158,29 @@ Barcode get_barcode(string & seq,
   barcode.editd=100; barcode.flank_editd=100; barcode.unambiguous = false;
 
   //initialise edlib configuration
-  EdlibEqualityPair additionalEqualities[5] = {{'?','A'},{'?','C'},{'?','G'},{'?','T'},{'?','N'}};
-  EdlibAlignConfig edlibConf = {flank_max_editd, EDLIB_MODE_HW, EDLIB_TASK_PATH, additionalEqualities, 5};
+  // Use IUPAC codes
+  EdlibEqualityPair additionalEqualities[28] = {
+    {'R', 'A'}, {'R', 'G'},
+    {'K', 'G'}, {'K', 'T'},
+    {'S', 'G'}, {'S', 'C'},
+    {'Y', 'C'}, {'Y', 'T'},
+    {'M', 'A'}, {'M', 'C'},
+    {'W', 'A'}, {'W', 'T'},
+    {'B', 'C'}, {'B', 'G'}, {'B', 'T'},
+    {'H', 'A'}, {'H', 'C'}, {'H', 'T'},
+    {'?', 'A'}, {'?', 'C'}, {'?', 'G'}, {'?', 'T'},
+    {'D', 'A'}, {'D', 'G'}, {'D', 'T'},
+    {'V', 'A'}, {'V', 'C'}, {'V', 'G'}
+  };
+  EdlibAlignConfig edlibConf = {flank_max_editd, EDLIB_MODE_HW, EDLIB_TASK_PATH, additionalEqualities, 28};
 
-  //search for primer and ployT (barcode and umi as wildcards)
-  string search_string=
-    search_pattern.primer+
-    search_pattern.temp_barcode+
-    search_pattern.umi_seq+
-    search_pattern.polyA;
+  // concatenate patterns in search_pattern in insertion order
+  std::string search_string;
+  for (const auto &pair : search_pattern) {
+    search_string += pair.second;
+  }
+
+  //search for the concatenated pattern
   EdlibAlignResult result = edlibAlign(search_string.c_str(), search_string.length(), seq.c_str(), seq.length(), edlibConf);
   if(result.status != EDLIB_STATUS_OK | result.numLocations==0 ){
     edlibFreeAlignResult(result);
@@ -178,19 +191,18 @@ Barcode get_barcode(string & seq,
   barcode.flank_end=result.endLocations[0];
 
   // Extract sub-patterns from aligment directly
-  vector<long unsigned int> subpattern_lengths = {
-    search_pattern.primer.length(),
-    search_pattern.temp_barcode.length(),
-    search_pattern.umi_seq.length(),
-    search_pattern.polyA.length()
-  };
+  std::vector<long unsigned int> subpattern_lengths;
+  for (const auto &pair : search_pattern) {
+    subpattern_lengths.push_back(pair.second.length());
+  }
 
-  std::vector<long unsigned int> subpattern_ends;
+std::vector<long unsigned int> subpattern_ends;
   subpattern_ends.resize(subpattern_lengths.size());
   std::partial_sum(subpattern_lengths.begin(), subpattern_lengths.end(), subpattern_ends.begin());
 
   vector<int> read_to_subpatterns;
-  read_to_subpatterns.reserve(subpattern_ends.size());
+  read_to_subpatterns.reserve(subpattern_ends.size() + 1);
+  read_to_subpatterns.emplace_back(barcode.flank_start);
 
   // initialise pointers
   int i_read = barcode.flank_start;
@@ -218,20 +230,58 @@ Barcode get_barcode(string & seq,
 
   edlibFreeAlignResult(result);
   
+
+  // Work out the index of BC and UMI in the pattern
+  // TODO: Should this be done in main to be more efficient?
+  // TODO: Handle edge cases where BC / UMI is not speficied in the pattern
+  int bc_index = -1, umi_index = -1;
+  auto it_pattern =
+      std::find_if(search_pattern.begin(), search_pattern.end(),
+                   [](const std::pair<std::string, std::string> &pair) {
+                     return pair.first == "BC";
+                   });
+  if (it_pattern != search_pattern.end()) {
+    bc_index = std::distance(search_pattern.begin(), it_pattern);
+  } else {
+    // error
+  }
+  it_pattern =
+      std::find_if(search_pattern.begin(), search_pattern.end(),
+                   [](const std::pair<std::string, std::string> &pair) {
+                     return pair.first == "UMI";
+                   });
+  if (it_pattern != search_pattern.end()) {
+    umi_index = std::distance(search_pattern.begin(), it_pattern);
+  } else {
+    // error
+  }
+
   //if not checking against known list of barcodes, return sequence after the primer
   //also check for a perfect match straight up as this will save computer later.
-  string exact_bc=seq.substr(read_to_subpatterns[0], read_to_subpatterns[1] - read_to_subpatterns[0]);
-  if(known_barcodes->size()==0 || (known_barcodes->find(exact_bc) != known_barcodes->end())){ 
+  // 
+  // read_to_subpatterns[subpattern_index] gives start of subpattern in the read
+  std::string exact_bc = seq.substr(
+      read_to_subpatterns[bc_index],
+      search_pattern[bc_index].second.length());
+if(known_barcodes->size()==0 || (known_barcodes->find(exact_bc) != known_barcodes->end())){ 
     barcode.barcode=exact_bc;
     barcode.editd=0;
     barcode.unambiguous=true;
-    barcode.umi=seq.substr(read_to_subpatterns[1], search_pattern.umi_seq.length());
-    return(barcode);
+    if (umi_index == -1) {
+      barcode.umi = "";
+    } else {
+      barcode.umi =
+          seq.substr(read_to_subpatterns[umi_index],
+                     search_pattern[umi_index].second.length());
+    }
+return(barcode);
   }
   
   // otherwise widen our search space and the look for matches with errors
-  string barcode_seq=seq.substr(read_to_subpatterns[0]-OFFSET,search_pattern.temp_barcode.length()+2*OFFSET);
-  
+   std::string barcode_seq =
+      seq.substr(read_to_subpatterns[bc_index] - OFFSET,
+                 search_pattern[bc_index].second.length() + 2 * OFFSET);
+ 
   //iterate over all the known barcodes, checking each sequentially
   unordered_set<string>::iterator known_barcodes_itr=known_barcodes->begin();
   unsigned int editDistance; unsigned int endDistance;
@@ -244,8 +294,31 @@ Barcode get_barcode(string & seq,
       barcode.unambiguous=true;
       barcode.editd=editDistance;
       barcode.barcode=*known_barcodes_itr;
-      barcode.umi=seq.substr(read_to_subpatterns[0]-OFFSET+endDistance,search_pattern.umi_seq.length());//assumes no error in UMI seq.
-      if(editDistance==0){ //if perfect match is found we're done.
+      if (umi_index == -1) {
+        barcode.umi = "";
+      } else if (umi_index == bc_index + 1) {
+        // read_to_subpatterns[bc_index] - OFFSET: start of barcode_seq
+        //                                       + endDistance: end of barcode
+        //                                                    i.e. start of UMI
+      barcode.umi =
+        seq.substr(read_to_subpatterns[bc_index] - OFFSET + endDistance,
+                   search_pattern[umi_index].second.length()); // assumes no error in UMI seq.
+    } else if (umi_index == bc_index - 1) {
+      // Use the start of BC according to edit_distance(barcode_seq, ...) and go backwords
+      // read_to_subpatterns[bc_index] - OFFSET + endDistance - search_pattern[bc_index].second.length():
+      //   start of BC
+      barcode.umi =
+        seq.substr(read_to_subpatterns[bc_index] - OFFSET + endDistance 
+                   - search_pattern[bc_index].second.length() 
+                   - search_pattern[umi_index].second.length(),
+                   search_pattern[umi_index].second.length());
+    }  else {
+      // BC and UMI not next to eachother, grab UMI according to aligment
+      barcode.umi =
+        seq.substr(read_to_subpatterns[umi_index],
+                   search_pattern[umi_index].second.length()); // assumes no error in UMI seq.
+    }
+if(editDistance==0){ //if perfect match is found we're done.
 	return(barcode);
       }
     }
@@ -254,12 +327,11 @@ Barcode get_barcode(string & seq,
 }
 
 //search a read for one or more barcodes (parent function that calls get_barcode)
-vector<Barcode> big_barcode_search(string & sequence, unordered_set<string> & known_barcodes,
-				   int max_flank_editd, int max_editd){ //, SearchSeq & ss){
+vector<Barcode> big_barcode_search(string & sequence, unordered_set<string> & known_barcodes, int max_flank_editd, int max_editd, const std::vector<std::pair<std::string, std::string>> &search_pattern) {
   vector<Barcode> return_vec; //vector of all the barcodes found
 
   //search for barcode
-  Barcode result=get_barcode(sequence,&known_barcodes,max_flank_editd,max_editd); //,ss);
+  Barcode result=get_barcode(sequence,&known_barcodes,max_flank_editd,max_editd, search_pattern); //,ss);
   if(result.editd<=max_editd && result.unambiguous) //add to return vector if edit distance small enough
     return_vec.push_back(result);
   
@@ -271,7 +343,7 @@ vector<Barcode> big_barcode_search(string & sequence, unordered_set<string> & kn
       masked_sequence.replace(return_vec.at(i).flank_start,flank_length,string(flank_length,'X'));
     } //recursively call this function until no more barcodes are found
     vector<Barcode> masked_res;
-    masked_res=big_barcode_search(masked_sequence,known_barcodes,max_flank_editd,max_editd); //,ss);
+    masked_res=big_barcode_search(masked_sequence,known_barcodes,max_flank_editd,max_editd, search_pattern); //,ss);
     return_vec.insert(return_vec.end(),masked_res.begin(),masked_res.end()); //add to result
   }
     
@@ -371,7 +443,8 @@ void print_read(string read_id,string read, string qual,
 
 // separated out from main so that this can be run with threads
 void search_read(vector<SearchResult> & reads, unordered_set<string> & known_barcodes,
-			 int flank_edit_distance, int edit_distance){
+			 int flank_edit_distance, int edit_distance,
+       const std::vector<std::pair<std::string, std::string>> &search_pattern) {
   
   for(int r=0; r<reads.size(); r++){
     
@@ -379,14 +452,16 @@ void search_read(vector<SearchResult> & reads, unordered_set<string> & known_bar
     reads[r].vec_bc_for=big_barcode_search(reads[r].line,
 					   known_barcodes,
 					   flank_edit_distance,
-					   edit_distance);
+					   edit_distance,
+             search_pattern);
     reads[r].rev_line=reads[r].line;
     reverse_compliment(reads[r].rev_line);
     //Check the reverse compliment of the read
     reads[r].vec_bc_rev=big_barcode_search(reads[r].rev_line,
 					   known_barcodes,
 					   flank_edit_distance,
-					   edit_distance);
+					   edit_distance,
+             search_pattern);
   }
 }
 
@@ -410,11 +485,8 @@ int main(int argc, char **argv){
   bool split_file_by_barcode=false; //(s)
   bool remove_barcodes=true; //(r)
   
-  search_pattern.primer = "CTACACGACGCTCTTCCGATCT"; //(p)
-  search_pattern.polyA = string(9,'T'); //(T)
-  search_pattern.umi_seq = string(12,'?'); //(length u)
-  search_pattern.temp_barcode = string(16,'?'); //(length b)
-  
+  std::vector<std::pair<std::string, std::string>> search_pattern;
+
   //Set of known barcodes 
   unordered_set<string> known_barcodes;
   unordered_set<string> found_barcodes;
@@ -428,7 +500,7 @@ int main(int argc, char **argv){
   ifstream file;
   string line;
 
-  while((c =  getopt(argc, argv, "k:i:l:r:b:u:e:f:n:s:hp:")) != EOF){
+  while((c =  getopt(argc, argv, "k:i:b:u:x:e:f:n:s:hp:")) != EOF){
     switch(c){
     case 'k': { //k=list of known barcodes
       string file_name(optarg);
@@ -454,10 +526,6 @@ int main(int argc, char **argv){
 	print_usage();
 	exit(1); //case barcode file is empty
       }
-      //set barcode length automatically from known barcodes..
-      int bl=(known_barcodes.begin())->length();
-      search_pattern.temp_barcode=string(bl,'?');
-      cerr << "Setting barcode length automatically to " << bl << "\n";
       params+=2;
       break;     
     }
@@ -479,29 +547,22 @@ int main(int argc, char **argv){
       params+=2;
       break;
     }
-    case 'l':{
-      search_pattern.primer=optarg;
-      cerr << "Setting primer to search for: " << search_pattern.primer << "\n";
-      params+=2;
-      break;
-    }
-    case 'r':{
-      search_pattern.polyA=optarg;
-      cerr << "Setting polyT to search for: " << search_pattern.polyA << "\n";
+    // x, u, b arguments inserts subpatterns to search_pattern
+    case 'x':{
+      search_pattern.push_back(std::make_pair("Unnamed Seq", optarg));
+      cerr << "Adding unnamed sequence to search for: " << optarg << "\n";
       params+=2;
       break;
     }
     case 'u':{
-      int ul=atoi(optarg);
-      search_pattern.umi_seq=string(ul,'?');
-      cerr << "Setting UMI length to " << ul << "\n";
+      search_pattern.push_back(std::make_pair("UMI", optarg));
+      cerr << "Setting UMI to search for: " << optarg << "\n";
       params+=2;
       break;
     }
     case 'b':{
-      int bl=atoi(optarg);
-      search_pattern.temp_barcode=string(bl,'?');
-      cerr << "Setting barcode length to " << bl << "\n";
+      search_pattern.push_back(std::make_pair("BC", optarg));
+      cerr << "Setting barcode to search for: " << optarg << "\n";
       params+=2;
       break;
     }
@@ -540,6 +601,20 @@ int main(int argc, char **argv){
     }
   }
   
+  // default case when no x, u, b is speficied
+  if (search_pattern.empty()) {
+    search_pattern = {
+      {"primer", "CTACACGACGCTCTTCCGATCT"},
+      {"BC", std::string(16, '?')},
+      {"UMI", std::string(12, '?')},
+      {"polyA", std::string(9, 'T')}
+    };
+  } else {
+    for (auto i : search_pattern) {
+      std::cerr << i.first << ": " << i.second << "\n";
+    }
+  }
+
   cerr << "For usage information type: flexiplex -h" << endl;
   
   istream * in;
@@ -635,13 +710,13 @@ int main(int argc, char **argv){
 	cout << "Read="<<t<< "\n";
 	cout << "2. Added read for thread" << (t / buffer) << " at " << asctime(now) << "\n"; **/
 	  sr_v[t].resize(b+1);
-	  threads[t]=std::thread(search_read,ref(sr_v[t]),ref(known_barcodes),flank_edit_distance,edit_distance);
+	  threads[t]=std::thread(search_read,ref(sr_v[t]),ref(known_barcodes),flank_edit_distance,edit_distance, ref(search_pattern));
 	  for(int t2=t+1; t2 < n_threads ; t2++) sr_v[t2].resize(0);
 	  goto print_result; //advance the line
 	}
       }
       // send reads to the thread
-      threads[t]=std::thread(search_read,ref(sr_v[t]),ref(known_barcodes),flank_edit_distance,edit_distance);
+      threads[t]=std::thread(search_read,ref(sr_v[t]),ref(known_barcodes),flank_edit_distance,edit_distance, ref(search_pattern));
     }
     /**    t_ = std::time(0);   // get time now
     now = std::localtime(&t_);
