@@ -188,7 +188,7 @@ Barcode get_barcode(const string & seq,
   } //fill in info about found primer and polyT location
   barcode.flank_editd=result.editDistance;
   barcode.flank_start=result.startLocations[0];
-  barcode.flank_end=result.endLocations[0];
+  barcode.flank_end=seq.find_first_not_of('T', result.endLocations[0]);
 
   // Extract sub-patterns from aligment directly
   std::vector<long unsigned int> subpattern_lengths;
@@ -337,7 +337,12 @@ vector<Barcode> big_barcode_search(string & sequence, unordered_set<string> & kn
   if (!return_vec.empty()) {
     string masked_sequence = sequence;
     for(const auto &barcode : return_vec){
-      int flank_length = barcode.flank_end - barcode.flank_start;
+      int flank_length;
+      if (barcode.flank_end == std::string::npos) {
+        flank_length = masked_sequence.length() - 1 - barcode.flank_start;
+      } else {
+        flank_length = barcode.flank_end - barcode.flank_start;
+      }
       masked_sequence.replace(barcode.flank_start, flank_length,string(flank_length,'X'));
     } //recursively call this function until no more barcodes are found
     vector<Barcode> masked_res;
@@ -400,6 +405,9 @@ void print_read(string read_id,string read, string qual,
     string new_read_id=barcode+"_"+vec_bc.at(b).umi+"#"+read_id+ss.str();
     
     // work out the start and end base in case multiple barcodes
+    if (vec_bc.at(b).flank_end == std::string::npos) {
+      continue;
+    }
     int read_start=vec_bc.at(b).flank_end;
     int read_length=read.length()-read_start;
     for(int f=0; f<vec_bc.size(); f++){
