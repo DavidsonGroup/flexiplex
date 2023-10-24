@@ -145,8 +145,8 @@ unsigned int edit_distance(const std::string& s1, const std::string& s2, unsigne
 //a targeted search in the region for barcode
 //Seaquence seearch is performed using edlib
 
-Barcode get_barcode(string & seq,
-		    unordered_set<string> *known_barcodes,
+Barcode get_barcode(const string & seq,
+		    const unordered_set<string> &known_barcodes,
 		    int flank_max_editd,
 		    int barcode_max_editd,
         const std::vector<std::pair<std::string, std::string>> &search_pattern) {
@@ -182,7 +182,7 @@ Barcode get_barcode(string & seq,
 
   //search for the concatenated pattern
   EdlibAlignResult result = edlibAlign(search_string.c_str(), search_string.length(), seq.c_str(), seq.length(), edlibConf);
-  if(result.status != EDLIB_STATUS_OK | result.numLocations==0 ){
+  if(result.status != EDLIB_STATUS_OK || result.numLocations==0 ){
     edlibFreeAlignResult(result);
     return(barcode); // no match found - return
   } //fill in info about found primer and polyT location
@@ -263,7 +263,7 @@ std::vector<long unsigned int> subpattern_ends;
   std::string exact_bc = seq.substr(
       read_to_subpatterns[bc_index],
       search_pattern[bc_index].second.length());
-if(known_barcodes->size()==0 || (known_barcodes->find(exact_bc) != known_barcodes->end())){ 
+if(known_barcodes.size()==0 || (known_barcodes.find(exact_bc) != known_barcodes.end())){ 
     barcode.barcode=exact_bc;
     barcode.editd=0;
     barcode.unambiguous=true;
@@ -283,17 +283,15 @@ return(barcode);
                  search_pattern[bc_index].second.length() + 2 * OFFSET);
  
   //iterate over all the known barcodes, checking each sequentially
-  unordered_set<string>::iterator known_barcodes_itr=known_barcodes->begin();
   unsigned int editDistance; unsigned int endDistance;
-  for(; known_barcodes_itr!=known_barcodes->end(); known_barcodes_itr++){
-    search_string=(*known_barcodes_itr); //known barcode to check again
-    editDistance = edit_distance(barcode_seq,search_string,endDistance,barcode_max_editd);
+  for (const auto &known_bc : known_barcodes) {
+    editDistance = edit_distance(barcode_seq,known_bc,endDistance,barcode_max_editd);
     if (editDistance == barcode.editd) {
       barcode.unambiguous=false;    
     } else if (editDistance < barcode.editd && editDistance <= barcode_max_editd) { //if best so far, update
       barcode.unambiguous=true;
       barcode.editd=editDistance;
-      barcode.barcode=*known_barcodes_itr;
+      barcode.barcode=known_bc;
       if (umi_index == -1) {
         barcode.umi = "";
       } else if (umi_index == bc_index + 1) {
@@ -331,16 +329,16 @@ vector<Barcode> big_barcode_search(string & sequence, unordered_set<string> & kn
   vector<Barcode> return_vec; //vector of all the barcodes found
 
   //search for barcode
-  Barcode result=get_barcode(sequence,&known_barcodes,max_flank_editd,max_editd, search_pattern); //,ss);
+  Barcode result=get_barcode(sequence,known_barcodes,max_flank_editd,max_editd, search_pattern); //,ss);
   if(result.editd<=max_editd && result.unambiguous) //add to return vector if edit distance small enough
-    return_vec.push_back(result);
+    return_vec.emplace_back(result);
   
   //if a result was found, mask out the flanking sequence and search again in case there are more.
-  if(return_vec.size()>0){
+  if (!return_vec.empty()) {
     string masked_sequence = sequence;
-    for(int i=0; i<return_vec.size(); i++){
-      int flank_length=return_vec.at(i).flank_end-return_vec.at(i).flank_start;
-      masked_sequence.replace(return_vec.at(i).flank_start,flank_length,string(flank_length,'X'));
+    for(const auto &barcode : return_vec){
+      int flank_length = barcode.flank_end - barcode.flank_start;
+      masked_sequence.replace(barcode.flank_start, flank_length,string(flank_length,'X'));
     } //recursively call this function until no more barcodes are found
     vector<Barcode> masked_res;
     masked_res=big_barcode_search(masked_sequence,known_barcodes,max_flank_editd,max_editd, search_pattern); //,ss);
@@ -375,21 +373,16 @@ void print_stats(string read_id, vector<Barcode> & vec_bc, ostream & out_stream)
   }
 }
 
-void print_line(string id, string read, string quals, ostream & out_stream){
-
-  //flag for read format
-  bool is_fastq=!(quals==""); //no quality scores passed = fasta
-
+void print_line(const string& id, const string& read, const string& quals, ostream& out_stream) {
+  const char delimiter = quals.empty() ? '>' : '@';
+  
   //output to the new read file
-    if(is_fastq)
-      out_stream << "@" << id << "\n";
-    else
-      out_stream << ">" << id << "\n";
-    out_stream << read << "\n";
-    if(is_fastq){
-      out_stream << "+" << id << "\n";
-      out_stream << quals << "\n";
-    }
+  out_stream << delimiter << id << '\n'
+             << read << '\n';
+  
+  if (!quals.empty())
+    out_stream << '+' << id << '\n'
+               << quals << '\n';
 }
 
 //print fastq or fasta lines..
