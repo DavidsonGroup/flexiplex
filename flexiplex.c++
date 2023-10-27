@@ -618,8 +618,8 @@ int main(int argc, char **argv){
   cerr << "For usage information type: flexiplex -h" << endl;
   
   istream * in;
-  FILE * ifile;
-    
+  ifstream reads_ifs;
+
   //check that a read file is given
   if(params>=argc){
     cerr << "No filename given... getting reads from stdin..." << endl;
@@ -627,13 +627,13 @@ int main(int argc, char **argv){
   } else {
     // check that the reads fileis okay
     string reads_file=argv[params];
-    file.open(reads_file);
-    if(!(file.good())){
+    reads_ifs.open(reads_file);
+    if(!(reads_ifs.good())){
       cerr << "Unable to open file " << reads_file << endl;
       print_usage();
       exit(1);
     }
-    in=&file;
+    in=&reads_ifs;
   }
   
   /********* FIND BARCODE IN READS ********/
@@ -755,7 +755,7 @@ int main(int argc, char **argv){
       }
     }
   }
-  file.close();
+  reads_ifs.close();
   
   cerr << "Number of reads processed: " << r_count << "\n";
   cerr << "Number of reads where a barcode was found: " << bc_count << "\n";
