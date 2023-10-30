@@ -25,8 +25,9 @@
 
 using namespace std;
 
-const static string VERSION="1.00";
-
+// Append .1 to version for dev code, remove for release
+// e.g. 1.00.1 (dev) goes to 1.01 (release)
+const static string VERSION="1.00.1"; 
 
 struct PredefinedStruct {
   string description;
@@ -89,7 +90,9 @@ void print_usage(){
     cerr << "    -d " << pds_itr->first << "\t\t" << pds_itr->second.description << ", equivalent to:\n";
     cerr << "\t\t\t\t"<< pds_itr->second.params << "\n";
   }
-  cerr << "\n     -h     Print this usage information.\n";
+  cerr << "\n     -h     Print this usage information.\n\n";
+  cerr << "Have a different barcode scheme you would like Flexiplex to work with? Post a request at:\n" ;
+  cerr << "https://github.com/DavidsonGroup/flexiplex/issues\n" ;
   cerr << endl;
 }
 
