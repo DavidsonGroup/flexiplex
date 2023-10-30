@@ -10,20 +10,42 @@
 #include <sstream>
 #include <unordered_set>
 #include <unordered_map>
+#include <map>
 #include <stdlib.h>
 #include <unistd.h>
 #include <vector>
 #include <algorithm>
 #include <thread>
 #include <numeric>
+#include <cstring>
 
 #include "edlib.h"
 
-#include <ctime>
+//#include <ctime>
 
 using namespace std;
 
 const static string VERSION="1.00";
+
+
+struct PredefinedStruct {
+  string description;
+  string params;
+};
+
+// predefined settings for known barcode/search schemes
+// new setting added to this map will automatically be available 
+static const map< string, PredefinedStruct> predefinedMap = { 
+  {"10x3v3", {"10x version 3 chemistry 3'", //option string and description for help information
+	      "-x CTACACGACGCTCTTCCGATCT -b ???????????????? -u ???????????? -x TTTTTTTTT -f 8 -e 2"}}, //settings
+  {"10x3v2",{"10x version 2 chemistry 3'",
+	     "-x CTACACGACGCTCTTCCGATCT -b ???????????????? -u ?????????? -x TTTTTTTTT -f 8 -e 2"}},
+  {"10x5v2",{"10x version 2 chemistry 5'",
+	     "-x CTACACGACGCTCTTCCGATCT -b ???????????????? -u ?????????? -x TTTCTTATATGGG -f 8 -e 2"}},
+  {"grep",{"Simple grep-like search (edit distance up to 2)",
+	   "-f 2 -k \"?\" -b \"\" -u \"\" -i false"}}  
+};
+
 
 // the help information which is printed when a user puts in the wrong
 // combination of command line options.
@@ -56,25 +78,20 @@ void print_usage(){
   cerr << "     When no search pattern x,b,u option is provided, the following default pattern is used: \n";
   cerr << "          primer: CTACACGACGCTCTTCCGATCT\n";
   cerr << "          barcode: ????????????????\n";
-  cerr << "          polyT: TTTTTTTTT\n";
   cerr << "          UMI: ????????????\n";
+  cerr << "          polyT: TTTTTTTTT\n";
   cerr << "     which is the same as providing: \n";
   cerr << "         -x CTACACGACGCTCTTCCGATCT -b ???????????????? -u ???????????? -x TTTTTTTTT\n\n";
   
   cerr << "  Predefined search schemes:\n";
-  cerr << "     -d  10x3v3      10x version 3 chemistry 3', equivalent to \n";
-  cerr << "                     -x CTACACGACGCTCTTCCGATCT -b ???????????????? -u ???????????? -x TTTTTTTTT -f 8 -e 2 \n";
-  cerr << "     -d  10x3v2      10x version 2 chemistry 3', equivalent to \n";
-  cerr << "                     -x CTACACGACGCTCTTCCGATCT -b ???????????????? -u ?????????? -x TTTTTTTTT -f 8 -e 2 \n";
-  cerr << "     -d  10x5v3      10x version 3 chemistry 5', equivalent to \n";
-  cerr << "                     -x CTACACGACGCTCTTCCGATCT -b ???????????????? -u ?????????? -x TTTTTTTTT -f 8 -e 2 \n"; 
-  cerr << "     -d  grep        Simple grep-like search, equivalent to \n";
-  cerr << "                     -f 2 -k \"?\" -b \"\" -u \"\" -i false \n";
-  
-  cerr << "     -h     Print this usage information.\n";
+  auto pds_itr = predefinedMap.begin();
+  for(; pds_itr!=predefinedMap.end(); pds_itr++){
+    cerr << "    -d " << pds_itr->first << "\t\t" << pds_itr->second.description << ", equivalent to:\n";
+    cerr << "\t\t\t\t"<< pds_itr->second.params << "\n";
+  }
+  cerr << "\n     -h     Print this usage information.\n";
   cerr << endl;
 }
-
 
 // compliment nucleotides - used to reverse compliment string
 char compliment(char& c){
@@ -517,8 +534,29 @@ int main(int argc, char **argv){
   ifstream file;
   string line;
 
-  while((c =  getopt(argc, argv, "k:i:b:u:x:e:f:n:s:hp:")) != EOF){
+  vector<char*> myArgs(argv, argv + argc);
+  
+  while((c=getopt(myArgs.size(),myArgs.data(), "d:k:i:b:u:x:e:f:n:s:hp:")) != EOF){
     switch(c){
+    case 'd': { //d=predefined list of settings for various search/barcode schemes
+      if( predefinedMap.find(optarg)==predefinedMap.end() ){
+	cerr << "Unknown argument, " << optarg << ", passed to option -d. See list below for options.\n"; 
+	print_usage();
+	exit(1);	  
+      } //else
+      cerr << "Using predefined settings for "<< optarg << ".\n";
+      istringstream settingsStream(predefinedMap.find(optarg)->second.params);
+      string token;
+      vector<char*> newArgv;
+      while(settingsStream >> token){ // code created with the help of chatGPT
+	char* newArg = new char[token.size()+1]; // +1 for null terminator //need to delete these later.
+	strcpy(newArg, token.c_str());
+	newArgv.push_back(newArg); // Append the token to the new argv
+      }
+      params+=2;
+      myArgs.insert(myArgs.begin()+=params,newArgv.begin(),newArgv.end());
+      break;
+    }
     case 'k': { //k=list of known barcodes
       string file_name(optarg);
       string bc;
@@ -567,7 +605,7 @@ int main(int argc, char **argv){
     // x, u, b arguments inserts subpatterns to search_pattern
     case 'x':{
       search_pattern.push_back(std::make_pair("Unnamed Seq", optarg));
-      cerr << "Adding unnamed sequence to search for: " << optarg << "\n";
+      cerr << "Adding flank sequence to search for: " << optarg << "\n";
       params+=2;
       break;
     }
@@ -620,16 +658,15 @@ int main(int argc, char **argv){
   
   // default case when no x, u, b is speficied
   if (search_pattern.empty()) {
+    cerr << "Using default search pattern: " << endl;
     search_pattern = {
       {"primer", "CTACACGACGCTCTTCCGATCT"},
       {"BC", std::string(16, '?')},
       {"UMI", std::string(12, '?')},
       {"polyA", std::string(9, 'T')}
     };
-  } else {
-    for (auto i : search_pattern) {
+    for (auto i : search_pattern)
       std::cerr << i.first << ": " << i.second << "\n";
-    }
   }
 
   cerr << "For usage information type: flexiplex -h" << endl;
@@ -638,12 +675,12 @@ int main(int argc, char **argv){
   ifstream reads_ifs;
 
   //check that a read file is given
-  if(params>=argc){
+  if(params>=myArgs.size()){
     cerr << "No filename given... getting reads from stdin..." << endl;
     in=&std::cin;
   } else {
     // check that the reads fileis okay
-    string reads_file=argv[params];
+    string reads_file=myArgs[params];
     reads_ifs.open(reads_file);
     if(!(reads_ifs.good())){
       cerr << "Unable to open file " << reads_file << endl;
