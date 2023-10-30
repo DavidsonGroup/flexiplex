@@ -23,13 +23,15 @@
 
 using namespace std;
 
-const static string VERSION="0.97.1";
+const static string VERSION="1.00";
 
 // the help information which is printed when a user puts in the wrong
 // combination of command line options.
 void print_usage(){
-  cerr << "usage: flexiplex [options] [reads_input]\n";
-  cerr << "  reads_input: a .fastq or .fasta file. Will read from stdin if empty.\n";
+  cerr << "usage: flexiplex [options] [reads_input]\n\n";
+  
+  cerr << "  reads_input: a .fastq or .fasta file. Will read from stdin if empty.\n\n";
+
   cerr << "  options: \n";
   cerr << "     -k known_list   Either 1) a text file of expected barcodes in the first column,\n"; 
   cerr << "                     one row per barcode, or 2) a comma separate string of barcodes.\n";
@@ -42,18 +44,33 @@ void print_usage(){
   cerr << "     -n prefix   Prefix for output filenames.\n";
   cerr << "     -e N   Maximum edit distance to barcode (default 2).\n";
   cerr << "     -f N   Maximum edit distance to primer+polyT (default 8).\n";
-  cerr << "     -p N   Number of threads (default: 1).\n";
-  cerr << "  Specifying adaptor / barcode pattern: \n";
-  cerr << "     -x sequence Append a sequence to the barcode pattern to search for\n";
-  cerr << "     -b sequence Append the barcode sequence to search for\n";
-  cerr << "     -u sequence Append the UMI sequence to search for\n";
+  cerr << "     -p N   Number of threads (default: 1).\n\n";
+  
+  cerr << "  Specifying adaptor / barcode structure : \n";
+  cerr << "     -x sequence Append flanking sequence to search for\n";
+  cerr << "     -b sequence Append the barcode pattern to search for\n";
+  cerr << "     -u sequence Append the UMI pattern to search for\n";
+  cerr << "     Notes:\n";
+  cerr << "          The order of these options matters\n";
+  cerr << "          ? - can be used as a wildcard\n";
   cerr << "     When no search pattern x,b,u option is provided, the following default pattern is used: \n";
   cerr << "          primer: CTACACGACGCTCTTCCGATCT\n";
   cerr << "          barcode: ????????????????\n";
   cerr << "          polyT: TTTTTTTTT\n";
   cerr << "          UMI: ????????????\n";
   cerr << "     which is the same as providing: \n";
-   cerr << "         -x CTACACGACGCTCTTCCGATCT -b ???????????????? -u ???????????? -x TTTTTTTTT\n";
+  cerr << "         -x CTACACGACGCTCTTCCGATCT -b ???????????????? -u ???????????? -x TTTTTTTTT\n\n";
+  
+  cerr << "  Predefined search schemes:\n";
+  cerr << "     -d  10x3v3      10x version 3 chemistry 3', equivalent to \n";
+  cerr << "                     -x CTACACGACGCTCTTCCGATCT -b ???????????????? -u ???????????? -x TTTTTTTTT -f 8 -e 2 \n";
+  cerr << "     -d  10x3v2      10x version 2 chemistry 3', equivalent to \n";
+  cerr << "                     -x CTACACGACGCTCTTCCGATCT -b ???????????????? -u ?????????? -x TTTTTTTTT -f 8 -e 2 \n";
+  cerr << "     -d  10x5v3      10x version 3 chemistry 5', equivalent to \n";
+  cerr << "                     -x CTACACGACGCTCTTCCGATCT -b ???????????????? -u ?????????? -x TTTTTTTTT -f 8 -e 2 \n"; 
+  cerr << "     -d  grep        Simple grep-like search, equivalent to \n";
+  cerr << "                     -f 2 -k \"?\" -b \"\" -u \"\" -i false \n";
+  
   cerr << "     -h     Print this usage information.\n";
   cerr << endl;
 }
