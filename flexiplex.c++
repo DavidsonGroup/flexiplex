@@ -44,7 +44,7 @@ static const map< string, PredefinedStruct> predefinedMap = {
   {"10x5v2",{"10x version 2 chemistry 5'",
 	     "-x CTACACGACGCTCTTCCGATCT -b ???????????????? -u ?????????? -x TTTCTTATATGGG -f 8 -e 2"}},
   {"grep",{"Simple grep-like search (edit distance up to 2)",
-	   "-f 2 -k \"?\" -b \"\" -u \"\" -i false"}}  
+	   "-f 2 -k ? -b \'\' -u \'\' -i false"}}  
 };
 
 
@@ -552,6 +552,7 @@ int main(int argc, char **argv){
       string token;
       vector<char*> newArgv;
       while(settingsStream >> token){ // code created with the help of chatGPT
+	token.erase(remove(token.begin(), token.end(), '\''),token.end());
 	char* newArg = new char[token.size()+1]; // +1 for null terminator //need to delete these later.
 	strcpy(newArg, token.c_str());
 	newArgv.push_back(newArg); // Append the token to the new argv
