@@ -315,50 +315,64 @@ return(barcode);
   }
   
   // otherwise widen our search space and the look for matches with errors
-   std::string barcode_seq =
-      seq.substr(read_to_subpatterns[bc_index] - OFFSET,
-                 search_pattern[bc_index].second.length() + 2 * OFFSET);
+
+  int left_bound = max(
+    read_to_subpatterns[bc_index] - OFFSET, // widen the search by using an OFFSET
+    0                                       // set a maximum starting character index of 0
+  );
+  int max_length = search_pattern[bc_index].second.length() + 2 * OFFSET;
+
+  std::string barcode_seq = seq.substr(left_bound, max_length);
  
   //iterate over all the known barcodes, checking each sequentially
   unordered_set<string>::iterator known_barcodes_itr=known_barcodes->begin();
-  unsigned int editDistance; unsigned int endDistance;
-  for(; known_barcodes_itr!=known_barcodes->end(); known_barcodes_itr++){
-    search_string=(*known_barcodes_itr); //known barcode to check again
-    editDistance = edit_distance(barcode_seq,search_string,endDistance,barcode_max_editd);
+  unsigned int editDistance, endDistance;
+
+  for(; known_barcodes_itr != known_barcodes->end(); known_barcodes_itr++){
+    search_string = *known_barcodes_itr; //known barcode to check against
+    editDistance = edit_distance(barcode_seq, search_string, endDistance, barcode_max_editd);
+
     if (editDistance == barcode.editd) {
-      barcode.unambiguous=false;    
+      barcode.unambiguous = false;    
     } else if (editDistance < barcode.editd && editDistance <= barcode_max_editd) { //if best so far, update
-      barcode.unambiguous=true;
-      barcode.editd=editDistance;
-      barcode.barcode=*known_barcodes_itr;
+      barcode.unambiguous = true;
+      barcode.editd = editDistance;
+      barcode.barcode = *known_barcodes_itr;
+
       if (umi_index == -1) {
         barcode.umi = "";
       } else if (umi_index == bc_index + 1) {
-        // read_to_subpatterns[bc_index] - OFFSET: start of barcode_seq
-        //                                       + endDistance: end of barcode
-        //                                                    i.e. start of UMI
-      barcode.umi =
-        seq.substr(read_to_subpatterns[bc_index] - OFFSET + endDistance,
-                   search_pattern[umi_index].second.length()); // assumes no error in UMI seq.
+        // left_bound: start of barcode_seq
+        // + endDistance: end of barcode
+        // i.e. start of UMI
+        barcode.umi = seq.substr(
+          left_bound + endDistance,
+          search_pattern[umi_index].second.length()
+        ); // assumes no error in UMI seq.
     } else if (umi_index == bc_index - 1) {
       // Use the start of BC according to edit_distance(barcode_seq, ...) and go backwords
       // read_to_subpatterns[bc_index] - OFFSET + endDistance - search_pattern[bc_index].second.length():
-      //   start of BC
-      barcode.umi =
-        seq.substr(read_to_subpatterns[bc_index] - OFFSET + endDistance 
+      // = start of BC
+      barcode.umi = seq.substr(
+        left_bound + endDistance 
                    - search_pattern[bc_index].second.length() 
                    - search_pattern[umi_index].second.length(),
-                   search_pattern[umi_index].second.length());
-    }  else {
+        search_pattern[umi_index].second.length()
+      );
+    } else {
       // BC and UMI not next to eachother, grab UMI according to aligment
-      barcode.umi =
-        seq.substr(read_to_subpatterns[umi_index],
-                   search_pattern[umi_index].second.length()); // assumes no error in UMI seq.
+      barcode.umi = seq.substr(
+        read_to_subpatterns[umi_index],
+        search_pattern[umi_index].second.length()
+      ); // assumes no error in UMI seq.
     }
-if(editDistance==0){ //if perfect match is found we're done.
-	return(barcode);
-      }
+      
+    //if perfect match is found we're done.
+    if (editDistance == 0) {
+    	return(barcode);
     }
+  }
+
   }
   return(barcode); //return the best matched barcode and associated information
 }
