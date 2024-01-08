@@ -40,17 +40,17 @@ Pre-compiled binaries are available at precompiled binaries in the [/bin subdire
 ### Compiling from source
 ```sh
 # download from GitHub
-wget https://github.com/DavidsonGroup/flexiplex/releases/download/v[x.y]/flexiplex-[x.y].tar.gz
+wget https://github.com/DavidsonGroup/flexiplex/releases/download/v<x.y>/flexiplex-<x.y>.tar.gz
 
 # untar and unzip
-tar -xvf flexiplex-[x.y].tar.gz
+tar -xvf flexiplex-<x.y>.tar.gz
 
 # change into source directory, compile, and install
-cd flexiplex-[x.y]
+cd flexiplex-<x.y>
 make
 ```
-Replacing [x.y] with the latest version number.
-The `flexiplex` binary will now be available in the `flexiplex-[x.y]` folder.
+Replacing <x.y> with the latest version number.
+The `flexiplex` binary will now be available in the `flexiplex-<x.y>` folder.
 
 Alternatively, you can copy the binary to `/usr/local/bin` with `make install`.
 
@@ -130,7 +130,7 @@ usage: flexiplex [options] [reads_input]
   
 There are several pre-sets which work for various 10x chemistry:
 ```
-flexiplex -d [chemistry] -k barcode_list.txt reads.fastq > new_reads.fastq
+flexiplex -d <chemistry> -k barcode_list.txt reads.fastq > new_reads.fastq
 ```
 
 10x 3' version 3:
@@ -163,7 +163,7 @@ gunzip -c read.fastq.gz | flexiplex -d 10x3v3 -k barcode_list.txt | gzip > new_r
 Flexiplex can be run in two passes: 1) to find the barcode sequences and 2) assign them to reads.
 To find barcodes, set the flanking edit distance to 0 (a perfect match) as these are less likely to have errors in the barcodes:
 ```
-flexiplex -d [chemistry] -f 0 reads.fastq
+flexiplex -d <chemistry> -f 0 reads.fastq
 ```
 e.g.
 
@@ -191,8 +191,25 @@ Flexiplex will output a table which gives the frequency of how often each barcod
 
 Then use this list to assign barcodes to reads:
 ```
-flexiplex -d [chemistry] -k my_filtered_barcode_list.txt reads.fastq > new_reads.fastq
+flexiplex -d <chemistry> -k my_filtered_barcode_list.txt reads.fastq > new_reads.fastq
 ```
+
+## Demultiplexing barcodes from the beginning or end of reads
+
+A common scenario is for no flanking sequence to be known, but the barcode to begin or end a fixed number of bases from the start or end of a read. In this instance you can add sequence to the beginnning/end to anchor the search. e.g. using "START" to anchor:
+
+```
+cat file.fastq | sed "/[@,+]/! s/^/START/g" | flexiplex -x "START" -f 0 -b "????????????????" -e 1 -k my_barcode_list.txt
+```
+Would search for 16bp barcodes from `my_barcode_list.txt` directly at the start of reads with an edit distance of 1.
+
+## Extracting UMIs from PCR-cDNA ONT data
+
+Recent library prepration kits for ONT PCR amplified cDNA attach unique molecular identifiers (UMIs) to the 5' end of transcripts. These can be used for deduplication in downstream data analysis. The UMI sequence for each read can be extracted using flexiplex:
+```
+flexiplex -x TTGGTGCTGATATTGCTTTTTTGGGG -u "???.....???" -b "" -k "?" -f 3 -e 1 reads.fastq
+```
+The UMIs will be added to the read ID in the output .fastq file and flexiplex_reads_barcodes.txt will contain a list of identified UMIs. Note that in the current version, the sequence provided after -u needs to be a string of wildcard characters, '?' the length of the expected UMI. The example above comes from data we have tested on and may need to be adjusted for different library preparation kits.
 
 ## Demultiplexing other read data by barcode
 
@@ -204,67 +221,51 @@ flexiplex -x <left flank> -u "??????????" -x <constant sequence between UMI-baro
 
 Here -u and -b give a pattern of the expected UMI and barcode sequence, in this instance wildcards of length 10bp and 16bp respectively, the exact sequences of the barcodes are provided through -k. -e and -f which are the maximum barcode and flanking sequence edit distances respectively may also need to be adjusted. As a guide we use -e 2 for 16bp barcodes and -f 8 for 32bp (left+right) flanking sequence.
 
+## Simple search
 
+Flexiplex can also be used to perform a simple error tolerant grep-like search of a single sequence, by define the sequence with -x and the required edit distance with -f. Matching reads will be printed to standard out.e.g.
+```
+flexiplex -x "CACTCTTGCCTACGCCACTAGC" -d grep -f 3 reads.fasta
+```
+Note, the the order of the -x and -d matter here. The search sequence needs to be defined before the -d preset is used.
 
+Alternatively, the search sequence can be split so that a subsequence has a lower error tolerance e.g.:
+```
+flexiplex -i false -x "CACTCTTGCC" -k "TACGC" -b "TACGC" -x "CACTAGC" -f 3 -e 0 reads.fasta
+```
+Here, we have defined that a perfect match (-e 0) is required for the middle (barcode) sequence, TACGC. Whereas the sequence surrounding this: CACTCTTGCC?????CACTAGC can have up to 3 mismatches/indels (-f 3). This is particularly useful for error tolerance searching of SNPs, as the alternative allele and can excluded through the requirement of a perfect match for the sequence at the variant.
 
-flexiplex expects a left flanking sequence, so if barcodes are a fixed number of bases at the very start of a read you can add sequence to the beginnning to anchor the search. e.g. using "START" to anchor:
+## Genotyping reads
+
+An alternative on the simple search above, is to allow multiple alleles to be searched for e.g. to search for the KRAS variant c.34G>A run:
 
 ```
-cat file.fastq | sed "/[@,+]/! s/^/START/g" | flexiplex -x "START" -r "" -u "" -f 0 -k my_barcode_list.txt
+flexiplex -i false -x "GTATCGTCAAGGCACTCTTGCCTACGC" -b "CAC?AGC" -k "CACTAGC,CACCAGC" -x "TCCAACTACCACAAGTTTATATTCAGT" -e 0 -f 15 reads.fasta > kras_var_reads.fasta
 ```
 
-## Assigning genotype to cells - long reads
+Where -k here lists the mutant and wild type variants (reverse complimented), with a few bp either side, -x are the adjacent sequence left and right of these respectively and -b gives the pattern of the barcode, which may include wildcards ('?').
 
-This is similar to [Demultiplexing other read data by barcode](#demultiplexing-other-read-data-by-barcode), but different alleles can be used in place of barcodes. e.g. to search for the KRAS variant c.34G>A run:
+## Genotyping cells - long reads
 
+Searching/genotyping and demultiplexing can be chained together. e.g. assign cellular barcodes then search for a specific mutation:
 ```
-flexiplex -i false -x "GTATCGTCAAGGCACTCTTGCCTACGC" -b "CAC?AGC" -k "CACTAGC,CACCAGC" -x "TCCAACTACCACAAGTTTATATTCAGT" -e 0 -f 15 -u "" reads.fasta > kras_var_reads.fasta
-```
-
-Where -k here lists the mutant and wild type variants (reverse complimented), with a few bp either side, -x are the adjacent sequence left and right of these respectively and -b gives the pattern of the barcode, which maybe wildcards.
-
-Multiple searches can be chained together. e.g. assign cellular barcodes then search for a specific mutation:
-```
-flexiplex -k barcode_list.txt reads.fasta | flexiplex -n barcode_mutation_mapping -i false -x "GTATCGTCAAGGCACTCTTGCCTACGC" -k "CACTAGC,CACCAGC" -b "CAC?AGC" -x "TCCAACTACCACAAGTTTATATTCAGT" -e 0 -f 15 -u "" reads.fasta > kras_var_reads_with_barcodes.fasta
+flexiplex -d <chemistry> -k barcode_list.txt reads.fasta | flexiplex -n barcode_mutation_mapping -i false -x "GTATCGTCAAGGCACTCTTGCCTACGC" -k "CACTAGC,CACCAGC" -b "CAC?AGC" -x "TCCAACTACCACAAGTTTATATTCAGT" -e 0 -f 15 -u "" reads.fasta > kras_var_reads_with_barcodes.fasta
 ```
 
 ## Assigning genotype to cells - short reads
 
-Flexiplex can be also be used on 10x short read data to search for cells with a specific target sequence such as a mutation or fusion of interest from the raw read data. This is essentially a combination of [Simple searching](##Simple-search) and [Demultiplexing other read data by barcode](#Demultiplexing-other-read-data-by-barcode). Here you "paste" the two read ends together and run in a similar way as you would for long reads. e.g. To search for a variant in 10x 3' data: 
+Flexiplex can be also be used on 10x short read data to search for cells with a specific target sequence such as a mutation or fusion of interest from the raw read data. Here you "paste" the two read ends together and run in a similar way as you would for long reads. e.g. To search for a variant in 10x 3' data: 
 
 ``` 
-paste Sample_R1.fastq Sample_R2.fastq | sed "/[@,+]/! s/^/CTACACGACGCTCTTCCGATCT/g" | flexiplex -x <variant sequence (20-40bp)> -d grep | flexiplex
+paste Sample_R1.fastq Sample_R2.fastq | sed "/[@,+]/! s/^/CTACACGACGCTCTTCCGATCT/g" | flexiplex -x <variant sequence (20-40bp)> -d grep | flexiplex -d 10x3v3
 ```
 This prefixes the read (before the barcodes) with the 10x primer (CTACACGACGCTCTTCCGATCT), searches for the variant, then searches for the barcode immediately after the primer and returns a list of barcodes with the variant in flexiplex_barcodes_counts.txt. The read IDs can be found in flexiplex_reads_barcodes.txt
 
 In this example we assume no sequencing errors in the barcodes as the data is Illumina, however a barcode list could also be provided (to the final command) to error correct. The order of demuliplexing and searching can also be switched. e.g.:
 
 ``` 
-paste Sample_R1.fastq Sample_R2.fastq | sed "/[@,+]/! s/^/CTACACGACGCTCTTCCGATCT/g" | flexiplex -k barcodes_list.txt | flexiplex -x <variant sequence> -d grep
+paste Sample_R1.fastq Sample_R2.fastq | sed "/[@,+]/! s/^/CTACACGACGCTCTTCCGATCT/g" | flexiplex -d 10x3v3 -k barcodes_list.txt | flexiplex -x <variant sequence> -d grep
 ```
-
-## Simple search
-
-To perform a simple error tolerant grep-like search of a single sequence, define the sequence with -x and the
-required edit distance with -f. e.g.
-```
-flexiplex -x "CACTCTTGCCTACGCCACTAGC" -d grep -f 3 reads.fasta
-```
-
-alternatively, the search sequence can be split so that some subsequence has a lower error tolerance e.g.:
-```
-flexiplex -i false -x "CACTCTTGCC" -k "TACGC" -b "TACGC" -x "CACTAGC" -f 3 -e 0 reads.fasta
-```
-
-Matching reads will be printed to standard out. Edit distances (-e and -f ) can be adjusted as required.
-
-## Extracting UMIs from PCR-cDNA ONT data
-
-Recent library prepration kits for ONT PCR amplified cDNA attach unique molecular identifiers (UMIs) to the 5' end of transcripts. These can be used for deduplication in downstream data analysis. The UMI sequence for each read can be extracted using flexiplex:
-```
-flexiplex -x TTGGTGCTGATATTGCTTTTTTGGGG -u "???.....???" -b "" -k "?" -f 3 -e 1 reads.fastq
-```
-The UMIs will be added to the read ID in the output .fastq file and flexiplex_reads_barcodes.txt will contain a list of identified UMIs. Note that in the current version, the sequence provided after -u needs to be a string of wildcard characters, '?' the length of the expected UMI. The example above comes from data we have tested on and may need to be adjusted for different library preparation kits.
 
 
 # Output
