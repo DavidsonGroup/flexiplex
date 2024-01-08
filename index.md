@@ -4,8 +4,8 @@
 - [Installing flexiplex](#installing-flexiplex)
 - [Usage](#usage)
 - [Examples of use](#examples-of-use)
-   - [Assigning single cell long reads to 10x 3’ cellular barcodes (when barcodes are known)](#assigning-single-cell-long-reads-to-10x-3-cellular-barcodes-when-barcodes-are-known)
-   - [Assigning single cell long reads to 10x 3' cellular barcodes (when barcodes are unknown)](#assigning-single-cell-long-reads-to-10x-3-cellular-barcodes-when-barcodes-are-unknown)
+   - [Assigning long reads to 10x barcodes (when barcodes are known)](#assigning-long-reads-to-10x-barcodes-when-barcodes-are-known)
+   - [Assigning long reads to 10x barcodes (when barcodes are unknown)](#assigning-long-reads-to-10x-barcodes-when-barcodes-are-unknown)
    - [Demultiplexing other read data by barcode](#demultiplexing-other-read-data-by-barcode)
    - [Assigning genotype to cells - long reads](#assigning-genotype-to-cells---long-reads)
    - [Assigning genotype to cells - short reads](#assigning-genotype-to-cells---short-reads)
@@ -126,50 +126,62 @@ usage: flexiplex [options] [reads_input]
 
 # Examples of use
 
-## Assigning single cell long reads to 10x 3' cellular barcodes (when barcodes are known)
+## Assigning long reads to 10x barcodes (when barcodes are known)
   
-The default settings work for 10x 3' v3 chemistry. To demultiplex run:
+There are several pre-sets which work for various 10x chemistry:
 ```
-flexiplex -k barcode_list.txt reads.fastq > new_reads.fastq
+flexiplex -d [chemistry] -k barcode_list.txt reads.fastq > new_reads.fastq
 ```
 
-Or for older chemistry with 10bp UMIs use:
+10x 3' version 3:
 ```
-flexiplex -u 10 -k barcode_list.txt reads.fastq > new_reads.fastq
+flexiplex -d 10x3v3 -k barcode_list.txt reads.fastq > new_reads.fastq
 ```
-or 
+
+10x 3' version 2 (10bp UMIs):
 ```
-flexiplex -d 10xv3v2 -k barcode_list.txt reads.fastq > new_reads.fastq
+flexiplex -d 10x3v2 -k barcode_list.txt reads.fastq > new_reads.fastq
+```
+
+10x 5' version 2:
+```
+flexiplex -d 10x5v2 -k barcode_list.txt reads.fastq > new_reads.fastq
+```
+
+Visium spatial (this has an identical barcode structure to 3' version 3):
+```
+flexiplex -d 10x3v3 -k spot_barcode_list.txt reads.fastq > new_reads.fastq
 ```
 
 If dealing with large gzipped files you can pipe reads into flexiplex to avoid unzipping. e.g.
 ```
-gunzip -c read.fastq.gz | flexiplex -k barcode_list.txt | gzip > new_reads.fastq.gz
+gunzip -c read.fastq.gz | flexiplex -d 10x3v3 -k barcode_list.txt | gzip > new_reads.fastq.gz
 ```
   
-## Assigning single cell long reads to 10x 3' cellular barcodes (when barcodes are unknown)
+## Assigning long reads to 10x barcodes (when barcodes are unknown)
 
 Flexiplex can be run in two passes: 1) to find the barcode sequences and 2) assign them to reads.
-To find barcodes, set the flanking edit distance to 0 (a perfect match) as these are less likely to have errors in the barcodes.
+To find barcodes, set the flanking edit distance to 0 (a perfect match) as these are less likely to have errors in the barcodes:
 ```
-flexiplex -f 0 reads.fastq
+flexiplex -d [chemistry] -f 0 reads.fastq
 ```
-
-The table written to standard output can help to select the number of cells. For example, it can be captured and plotted in R or similar to make a knee plot.
-
-Once the approximate number of cells is know, subset the list of barcodes by this number:
+e.g.
 
 ```
-head -n <number of cells> flexiplex_barcodes_counts.txt > my_barcode_list.txt
+flexiplex -d 10x3v3 -f 0 reads.fastq
+```
+or for a zipped fastq:
+```
+gunzip -c read.fastq.gz | flexiplex -d 10x3v3 -f 0
 ```
 
-> **Optional**: You may also want to filter this list by [the possible 10x barcodes](https://kb.10xgenomics.com/hc/en-us/articles/115004506263-What-is-a-barcode-whitelist-). Flexiplex comes bundled with a standalone script to do this:
+Flexiplex will output a table which gives the frequency of how often each barcode is observed in the data. This table will need to be filtered for high quality barcodes which are free from errors. Do automate this, Flexiplex comes bundled with a standalone python script, flexiplex-filter. Flexiplex-filter can also filter against any list of possible barcodes, such as [the possible 10x barcodes](https://kb.10xgenomics.com/hc/en-us/articles/115004506263-What-is-a-barcode-whitelist-).
 > 
 > ```
 > scripts/flexiplex_filter/main.py --whitelist 3M-february-2018.txt --no-inflection --outfile my_filtered_barcode_list.txt my_barcode_list.txt
 > ```
 > 
-> This script also allows for the discovery and visualisation of points of inflection as another filtering step. A brief 'autopilot' mode is provided which will determine an inflection point and filter out any cells with a lower count:
+> This script also allows for the discovery and visualisation of points of inflection in a single cell knee plot. A brief 'autopilot' mode is provided which will determine an inflection point and filter out any cells with a lower count:
 > 
 > ```
 > scripts/flexiplex_filter/main.py --whitelist 3M-february-2018.txt --outfile my_filtered_barcode_list.txt my_barcode_list.txt
@@ -179,22 +191,21 @@ head -n <number of cells> flexiplex_barcodes_counts.txt > my_barcode_list.txt
 
 Then use this list to assign barcodes to reads:
 ```
-flexiplex -k my_filtered_barcode_list.txt reads.fastq > new_reads.fastq
+flexiplex -d [chemistry] -k my_filtered_barcode_list.txt reads.fastq > new_reads.fastq
 ```
 
 ## Demultiplexing other read data by barcode
 
-To demultiplex with other flanking and barcodes sequences, set these e.g.:
+Flexiplex is highly flexible (as the name suggests) and the order, sequence and maximum distance to flanking, barcode and UMI sequence can all be manually set e.g. a barcode structure with UMI before barcode, and a constant sequence between them might look like:
+
 ```
-flexiplex -x <left flank> -k "<barcode1>,<barcode2>,<barcode3>,..." -b "??.length of barcodes.??" -x <right flank> reads.fastq > new_reads.fastq
+flexiplex -x <left flank> -u "??????????" -x <constant sequence between UMI-barode> -b "????????????????" -x <right flank> -k <list of barcodes, or barcode_file> -f <flank maximum distance> -e <barcode maximum distance> reads.fastq > new_reads.fastq
 ```
 
-This assumes no UMI sequence is present. -e and -f which are the maximum barcode and flanking sequence edit distances respectively may also need to be adjusted. As a guide we use -e 2 for 16bp barcodes and -f 8 for 32bp (left+right) flanking sequence.
+Here -u and -b give a pattern of the expected UMI and barcode sequence, in this instance wildcards of length 10bp and 16bp respectively, the exact sequences of the barcodes are provided through -k. -e and -f which are the maximum barcode and flanking sequence edit distances respectively may also need to be adjusted. As a guide we use -e 2 for 16bp barcodes and -f 8 for 32bp (left+right) flanking sequence.
 
-If barcodes are expected at the start and end of reads, force flexiplex not to chop reads when mutiple barcodes are seen (-i false). Reads can be separated into different files by barcodes (-s true).
-```
-flexiplex -i false -s true -x <left flank> -k "<barcode1>,<barcode2>,<barcode3>,..." -x <right flank>
-```
+
+
 
 flexiplex expects a left flanking sequence, so if barcodes are a fixed number of bases at the very start of a read you can add sequence to the beginnning to anchor the search. e.g. using "START" to anchor:
 
