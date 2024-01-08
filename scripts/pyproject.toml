@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "flexiplex-filter"
-version = "0.97.1"
+version = "1.01"
 authors = [{name="Davidson Group", email="olliecheng@outlook.com" }]
 description = "Filter barcodes from flexiplex by whitelist and inflection point"
 readme = "USAGE.md"

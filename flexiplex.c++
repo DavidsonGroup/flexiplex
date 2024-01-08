@@ -21,13 +21,11 @@
 
 #include "edlib.h"
 
-//#include <ctime>
-
 using namespace std;
 
 // Append .1 to version for dev code, remove for release
 // e.g. 1.00.1 (dev) goes to 1.01 (release)
-const static string VERSION="1.00.1"; 
+const static string VERSION="1.01"; 
 
 struct PredefinedStruct {
   string description;

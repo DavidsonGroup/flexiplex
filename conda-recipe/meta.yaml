@@ -1,4 +1,4 @@
-{% set version = "0.97.1" %}
+{% set version = "1.01" %}
 
 package:
   name: flexiplex
