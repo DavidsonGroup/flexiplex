@@ -242,8 +242,13 @@ def n_derivative(df, x, y, window_size=9):
     Returns:
         np.array with length len(df), with the numerical derivative
     """
+    # cap window size, so that it is always smaller than the
+    # length of the input data
+    window_size = min(window_size, len(df) - (2 if (len(df) % 2) else 1))
+
     # calculates the rolling mean of the numerical derivative
     half_size = window_size // 2
+
     convolution = np.ones(window_size)
 
     # window_size must be odd
@@ -261,7 +266,9 @@ def n_derivative(df, x, y, window_size=9):
         (
             diff_orig[:half_size],
             rolling,
-            diff_orig[-half_size:],
+            (
+                diff_orig[-half_size:] if half_size != 0 else []
+            ),  # if half_size is 0, this would just double the array
             [np.NaN],
         )
     )
