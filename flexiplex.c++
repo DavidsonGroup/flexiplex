@@ -151,34 +151,50 @@ unsigned int edit_distance(const std::string& s1, const std::string& s2, unsigne
   end=len1-1;
 
   //loop over the distance matrix elements and calculate running distance
-  for(unsigned int j = 1; j < len2; ++j){
-    bool any_below_threshold=false; //flag used for early exit
-    for(unsigned int i = 1; i < len1; ++i){
-      int sub=(s1_c[i - 1] == s2_c[j - 1]) ? 0 : 1 ; //are the bases the same?
-      if(sub==0) //if yes, no need to incremet distance
-	dist_holder[i*len2+j]=dist_holder[(i-1)*len2+(j-1)];
-      else //otherwise add insertion,deletion or substituation 
-	dist_holder[i*len2+j] = std::min({ //j+i*len2  //set[i][j]
-	    dist_holder[(i-1)*len2+j] + 1, //[i-1][j]
-	    dist_holder[i*len2+(j-1)] + 1, //[i][j-1]
-	    dist_holder[(i-1)*len2+(j-1)] + 1}); // ((s1_c[i - 1] == s2_c[j - 1]) ? 0 : 1) });
-      if(dist_holder[i*len2+j] <= max_editd) any_below_threshold=true;
-      if(j==(len2-1) && dist_holder[i*len2+j]<best){ //if this is the last row in j
-	best=dist_holder[i*len2+j];                  //check if this is the best running score
-	end=i;                                       //update the end position of alignment
+  for (unsigned int j = 1; j < len2; ++j) {
+    bool any_below_threshold = false; // flag used for early exit
+    for (unsigned int i = 1; i < len1; ++i) {
+      int sub = (s1_c[i - 1] == s2_c[j - 1]) ? 0 : 1; // are the bases the same?
+
+      // if yes, no need to increment distance
+      if (sub == 0) {
+        dist_holder[i * len2 + j] = dist_holder[(i - 1) * len2 + (j - 1)];
+      }
+
+      // otherwise add insertion, deletion or substitution
+      else {
+        // clang-format off
+        dist_holder[i*len2+j] = std::min({ //j+i*len2  //set[i][j]
+          dist_holder[(i-1)*len2+j] + 1, //[i-1][j]
+          dist_holder[i*len2+(j-1)] + 1, //[i][j-1]
+          dist_holder[(i-1)*len2+(j-1)] + 1}); // ((s1_c[i - 1] == s2_c[j - 1]) ? 0 : 1) });
+        // clang-format on
+      }
+      if (dist_holder[i * len2 + j] <= max_editd) {
+        any_below_threshold = true;
+      }
+
+      // if this is the last row in j
+      if (j == (len2 - 1) && dist_holder[i * len2 + j] < best) {
+        // check if this is the best running score
+        best = dist_holder[i * len2 + j];
+        end = i; // update the end position of alignment
       }
     }
-    if(!any_below_threshold){ //early exit to save time.
+
+    // early exit to save time.
+    if(!any_below_threshold) {
       return(100);
     }
   }
-  return best; //return edit distance
+
+  return best; // return edit distance
 }
 
 
-//Given a string 'seq' search for substring with primer and polyT sequence followed by
-//a targeted search in the region for barcode
-//Seaquence seearch is performed using edlib
+// Given a string 'seq' search for substring with primer and polyT sequence followed by
+// a targeted search in the region for barcode
+// Sequence seearch is performed using edlib
 
 Barcode get_barcode(string & seq,
 		    unordered_set<string> *known_barcodes,
@@ -515,350 +531,389 @@ void search_read(vector<SearchResult> & reads, unordered_set<string> & known_bar
 }
 
 // MAIN is here!!
-int main(int argc, char **argv){
+int main(int argc, char **argv) {
   std::ios_base::sync_with_stdio(false);
 
   cerr << "FLEXIPLEX " << VERSION << "\n";
 
-  //Variables to store user options
-  //Set these to their defaults
-  int expected_cells=0; //(d)
-  int edit_distance=2; //(e)
-  int flank_edit_distance=8; //(f)
+  // Variables to store user options
+  // Set these to their defaults
+  int expected_cells = 0;      //(d)
+  int edit_distance = 2;       //(e)
+  int flank_edit_distance = 8; //(f)
 
-  //set the output filenames
-  string out_stat_filename="reads_barcodes.txt";
-  string out_bc_filename="barcodes_counts.txt";
-  string out_filename_prefix="flexiplex"; //(n)
+  // set the output filenames
+  string out_stat_filename = "reads_barcodes.txt";
+  string out_bc_filename = "barcodes_counts.txt";
+  string out_filename_prefix = "flexiplex"; //(n)
 
-  bool split_file_by_barcode=false; //(s)
-  bool remove_barcodes=true; //(r)
-  
+  bool split_file_by_barcode = false; //(s)
+  bool remove_barcodes = true;        //(r)
+
   std::vector<std::pair<std::string, std::string>> search_pattern;
 
-  //Set of known barcodes 
+  // Set of known barcodes
   unordered_set<string> known_barcodes;
   unordered_set<string> found_barcodes;
 
   // threads
-  int n_threads=1;
-  
+  int n_threads = 1;
+
   /*** Pass command line option *****/
   int c;
-  int params=1;
+  int params = 1;
   ifstream file;
   string line;
 
-  vector<char*> myArgs(argv, argv + argc);
-  
-  while((c=getopt(myArgs.size(),myArgs.data(), "d:k:i:b:u:x:e:f:n:s:hp:")) != EOF){
-    switch(c){
-    case 'd': { //d=predefined list of settings for various search/barcode schemes
-      if( predefinedMap.find(optarg)==predefinedMap.end() ){
-	cerr << "Unknown argument, " << optarg << ", passed to option -d. See list below for options.\n"; 
-	print_usage();
-	exit(1);	  
-      } //else
-      cerr << "Using predefined settings for "<< optarg << ".\n";
+  vector<char *> myArgs(argv, argv + argc);
+
+  while ((c = getopt(myArgs.size(), myArgs.data(),
+                     "d:k:i:b:u:x:e:f:n:s:hp:")) != EOF) {
+    switch (c) {
+    case 'd': { // d=predefined list of settings for various search/barcode
+                // schemes
+      if (predefinedMap.find(optarg) == predefinedMap.end()) {
+        cerr << "Unknown argument, " << optarg
+             << ", passed to option -d. See list below for options.\n";
+        print_usage();
+        exit(1);
+      } // else
+      cerr << "Using predefined settings for " << optarg << ".\n";
       istringstream settingsStream(predefinedMap.find(optarg)->second.params);
       string token;
-      vector<char*> newArgv;
-      while(settingsStream >> token){ // code created with the help of chatGPT
-	token.erase(remove(token.begin(), token.end(), '\''),token.end());
-	char* newArg = new char[token.size()+1]; // +1 for null terminator //need to delete these later.
-	strcpy(newArg, token.c_str());
-	newArgv.push_back(newArg); // Append the token to the new argv
+      vector<char *> newArgv;
+      while (settingsStream >> token) { // code created with the help of chatGPT
+        token.erase(remove(token.begin(), token.end(), '\''), token.end());
+        char *newArg =
+            new char[token.size() +
+                     1]; // +1 for null terminator //need to delete these later.
+        strcpy(newArg, token.c_str());
+        newArgv.push_back(newArg); // Append the token to the new argv
       }
-      params+=2;
-      myArgs.insert(myArgs.begin()+=params,newArgv.begin(),newArgv.end());
+      params += 2;
+      myArgs.insert(myArgs.begin() += params, newArgv.begin(), newArgv.end());
       break;
     }
-    case 'k': { //k=list of known barcodes
+    case 'k': { // k=list of known barcodes
       string file_name(optarg);
       string bc;
       /**** READ BARCODE LIST FROM FILE ******/
       file.open(file_name);
-      cerr << "Setting known barcodes from "<< file_name << "\n";
-      if(!(file.good())){ //if the string given isn't a file
-	stringstream bc_list(file_name); string s;
-	while (getline(bc_list, bc, ',')) //tokenize
-	  known_barcodes.insert(bc);
+      cerr << "Setting known barcodes from " << file_name << "\n";
+      if (!(file.good())) { // if the string given isn't a file
+        stringstream bc_list(file_name);
+        string s;
+        while (getline(bc_list, bc, ',')) // tokenize
+          known_barcodes.insert(bc);
       } else {
-	// otherwise get the barcodes from the file..
-	while ( getline (file,line) ){
-	  istringstream line_stream(line);
-	  line_stream >> bc;
-	  known_barcodes.insert(bc); 
-	}
-	file.close();
+        // otherwise get the barcodes from the file..
+        while (getline(file, line)) {
+          istringstream line_stream(line);
+          line_stream >> bc;
+          known_barcodes.insert(bc);
+        }
+        file.close();
       }
       cerr << "Number of known barcodes: " << known_barcodes.size() << "\n";
-      if(known_barcodes.size()==0){
-	print_usage();
-	exit(1); //case barcode file is empty
+      if (known_barcodes.size() == 0) {
+        print_usage();
+        exit(1); // case barcode file is empty
       }
-      params+=2;
-      break;     
-    }
-    case 'i':{
-      remove_barcodes=get_bool_opt_arg(optarg);
-      cerr << "Setting read IDs to be replaced: "<< remove_barcodes << "\n";
-      params+=2;
+      params += 2;
       break;
     }
-    case 'e':{
-      edit_distance=atoi(optarg);
-      cerr << "Setting max barcode edit distance to "<< edit_distance << "\n";
-      params+=2;
+    case 'i': {
+      remove_barcodes = get_bool_opt_arg(optarg);
+      cerr << "Setting read IDs to be replaced: " << remove_barcodes << "\n";
+      params += 2;
       break;
     }
-    case 'f':{
-      flank_edit_distance=atoi(optarg);
-      cerr << "Setting max flanking sequence edit distance to "<< flank_edit_distance << "\n";
-      params+=2;
+    case 'e': {
+      edit_distance = atoi(optarg);
+      cerr << "Setting max barcode edit distance to " << edit_distance << "\n";
+      params += 2;
+      break;
+    }
+    case 'f': {
+      flank_edit_distance = atoi(optarg);
+      cerr << "Setting max flanking sequence edit distance to "
+           << flank_edit_distance << "\n";
+      params += 2;
       break;
     }
     // x, u, b arguments inserts subpatterns to search_pattern
-    case 'x':{
+    case 'x': {
       search_pattern.push_back(std::make_pair("Unnamed Seq", optarg));
       cerr << "Adding flank sequence to search for: " << optarg << "\n";
-      params+=2;
+      params += 2;
       break;
     }
-    case 'u':{
+    case 'u': {
       search_pattern.push_back(std::make_pair("UMI", optarg));
       cerr << "Setting UMI to search for: " << optarg << "\n";
-      params+=2;
+      params += 2;
       break;
     }
-    case 'b':{
+    case 'b': {
       search_pattern.push_back(std::make_pair("BC", optarg));
       cerr << "Setting barcode to search for: " << optarg << "\n";
-      params+=2;
+      params += 2;
       break;
     }
-    case 'h':{
+    case 'h': {
       print_usage();
       exit(0);
     }
-    case 'n':{
-      out_filename_prefix=optarg;
-      cerr << "Setting output filename prefix to: " << out_filename_prefix << "\n";
-      params+=2;
+    case 'n': {
+      out_filename_prefix = optarg;
+      cerr << "Setting output filename prefix to: " << out_filename_prefix
+           << "\n";
+      params += 2;
       break;
     }
-    case 's':{
-      split_file_by_barcode=get_bool_opt_arg(optarg);
-      cerr << "Split read output into separate files by barcode: " << split_file_by_barcode << "\n";
-      int max_split_bc=50;
-      if(known_barcodes.size()>max_split_bc){
-	cerr << "Too many barcodes to split into separate files: "<< known_barcodes.size()
-	     << "> "<< max_split_bc<< "\n";
-	split_file_by_barcode=false;
+    case 's': {
+      split_file_by_barcode = get_bool_opt_arg(optarg);
+      cerr << "Split read output into separate files by barcode: "
+           << split_file_by_barcode << "\n";
+      int max_split_bc = 50;
+      if (known_barcodes.size() > max_split_bc) {
+        cerr << "Too many barcodes to split into separate files: "
+             << known_barcodes.size() << "> " << max_split_bc << "\n";
+        split_file_by_barcode = false;
       }
-      params+=2;
+      params += 2;
       break;
     }
-    case 'p':{
-      n_threads=atoi(optarg);
-      cerr << "Setting number of threads to "<< n_threads << endl;
-      params+=2;
+    case 'p': {
+      n_threads = atoi(optarg);
+      cerr << "Setting number of threads to " << n_threads << endl;
+      params += 2;
       break;
     }
-    case '?': //other unknown options
+    case '?': // other unknown options
       cerr << "Unknown option.. stopping" << endl;
       print_usage();
       exit(1);
     }
   }
-  
+
   // default case when no x, u, b is speficied
   if (search_pattern.empty()) {
     cerr << "Using default search pattern: " << endl;
-    search_pattern = {
-      {"primer", "CTACACGACGCTCTTCCGATCT"},
-      {"BC", std::string(16, '?')},
-      {"UMI", std::string(12, '?')},
-      {"polyA", std::string(9, 'T')}
-    };
+    search_pattern = {{"primer", "CTACACGACGCTCTTCCGATCT"},
+                      {"BC", std::string(16, '?')},
+                      {"UMI", std::string(12, '?')},
+                      {"polyA", std::string(9, 'T')}};
     for (auto i : search_pattern)
       std::cerr << i.first << ": " << i.second << "\n";
   }
 
   cerr << "For usage information type: flexiplex -h" << endl;
-  
-  istream * in;
+
+  istream *in;
   ifstream reads_ifs;
 
-  //check that a read file is given
-  if(params>=myArgs.size()){
+  // check that a read file is given
+  if (params >= myArgs.size()) {
     cerr << "No filename given... getting reads from stdin..." << endl;
-    in=&std::cin;
+    in = &std::cin;
   } else {
     // check that the reads fileis okay
-    string reads_file=myArgs[params];
+    string reads_file = myArgs[params];
     reads_ifs.open(reads_file);
-    if(!(reads_ifs.good())){
+    if (!(reads_ifs.good())) {
       cerr << "Unable to open file " << reads_file << endl;
       print_usage();
       exit(1);
     }
-    in=&reads_ifs;
+    in = &reads_ifs;
   }
-  
+
   /********* FIND BARCODE IN READS ********/
   string sequence;
-  int bc_count=0;
-  int r_count=0;
-  int multi_bc_count=0;
-  
-  ofstream out_stat_file;
-  out_stat_filename=out_filename_prefix+"_"+out_stat_filename;
-  out_bc_filename=out_filename_prefix+"_"+out_bc_filename;
-  params+=2;
+  int bc_count = 0;
+  int r_count = 0;
+  int multi_bc_count = 0;
 
-  if(known_barcodes.size()>0){
+  ofstream out_stat_file;
+  out_stat_filename = out_filename_prefix + "_" + out_stat_filename;
+  out_bc_filename = out_filename_prefix + "_" + out_bc_filename;
+  params += 2;
+
+  if (known_barcodes.size() > 0) {
     out_stat_file.open(out_stat_filename);
     out_stat_file << "Read\tCellBarcode\tFlankEditDist\tBarcodeEditDist\tUMI\n";
   }
+
   cerr << "Searching for barcodes...\n";
-  bool is_fastq=true;
-  unordered_map< string, int > barcode_counts; 
+
+  bool is_fastq = true;
+  unordered_map<string, int> barcode_counts;
   string read_id_line;
-  if(getline (*in,read_id_line)){ //check the first line for file type
-    if(read_id_line[0]=='>'){ is_fastq=false;
-    } else if (read_id_line[0] == '@'){ //fasta
+
+  if (getline(*in, read_id_line)) { // check the first line for file type
+    if (read_id_line[0] == '>') {
+      is_fastq = false;
+    } else if (read_id_line[0] == '@') { // fasta - ignore!
     } else {
-      cerr << "Unknown read format... exiting" << endl; exit(1);
+      cerr << "Unknown read format... exiting" << endl;
+      exit(1);
     }
   }
-  
-  while ( getline (*in,line) ){
-    const int buffer_size = 2000; //number of reads to pass to one thread.
+
+  while (getline(*in, line)) {
+    const int buffer_size = 2000; // number of reads to pass to one thread.
+
     vector<vector<SearchResult>> sr_v(n_threads);
-    for(int i=0; i<n_threads; i++)
-      sr_v[i]=vector<SearchResult>(buffer_size); 
+    for (int i = 0; i < n_threads; i++) {
+      sr_v[i] = vector<SearchResult>(buffer_size);
+    }
+
     vector<thread> threads(n_threads);
-    for(int t=0; t < n_threads; t++){ //get n_threads*buffer number or reads..
-      for(int b=0 ; b < buffer_size ; b++){ 
-	SearchResult & sr = sr_v[t][b];
-	sr.line=line;
-	string read_id;
-	//sr.read_id= read_id_line.substr(1,read_id_line.find_first_not_of(" \t")-1);      
-	istringstream line_stream(read_id_line);
-	line_stream >> sr.read_id;
-	sr.read_id.erase(0,1);
 
-	    
-	//      string qual_scores="";
-	if(!is_fastq){ //fastq (account for multi-lines per read)
-	  string buffer_string; 
-	  while(getline(*in,buffer_string) && buffer_string[0]!='>')
-	    sr.line+=buffer_string;
-	  read_id_line=buffer_string;
-	} else { //fastq (get quality scores)
-	  for(int s=0; s<2; s++) getline(*in,sr.qual_scores);
-	  getline(*in,read_id_line);
-	}
-      
-	r_count++; //progress counter
-	if(r_count % 100000 == 0)
-	  cerr << r_count/((double) 1000000 ) << " million reads processed.." << endl;
+    // get n_threads*buffer number of reads..
+    for (int t = 0; t < n_threads; t++) {
+      for (int b = 0; b < buffer_size; b++) {
+        SearchResult &sr = sr_v[t][b];
 
-	//sr.read_id=read_id;
-	//sr.line=line;
-	//sr.qual_scores=qual_scores;
-	
-	//      sr_v[t][b] / buffer_size].push_back(sr);
-      
-	//this is quite ugly, must be a better way to do this..
-	if(b==buffer_size-1 && t==n_threads-1){
-	  break; //if it's the last in the chunk don't getline as this happens in the while statement
-	} else if( !getline(*in,line)){ //case we are at the end of the reads.
-	/**	std::time_t t_ = std::time(0);   // get time now
-	std::tm* now = std::localtime(&t_);
-	cout << "Read="<<t<< "\n";
-	cout << "2. Added read for thread" << (t / buffer) << " at " << asctime(now) << "\n"; **/
-	  sr_v[t].resize(b+1);
-	  threads[t]=std::thread(search_read,ref(sr_v[t]),ref(known_barcodes),flank_edit_distance,edit_distance, ref(search_pattern));
-	  for(int t2=t+1; t2 < n_threads ; t2++) sr_v[t2].resize(0);
-	  goto print_result; //advance the line
-	}
+        sr.line = line;
+        string read_id;
+
+        istringstream line_stream(read_id_line);
+        line_stream >> sr.read_id;
+        sr.read_id.erase(0, 1);
+
+        if (!is_fastq) { // fasta (account for multi-lines per read)
+          string buffer_string;
+          while (getline(*in, buffer_string) && buffer_string[0] != '>')
+            sr.line += buffer_string;
+          read_id_line = buffer_string;
+        } else { // fastq (get quality scores)
+          for (int s = 0; s < 2; s++) {
+            getline(*in, sr.qual_scores);
+          }
+          getline(*in, read_id_line);
+        }
+
+        r_count++; // progress counter
+        if (r_count % 100000 == 0) {
+          cerr << r_count / ((double)1000000) << " million reads processed.."
+               << endl;
+        }
+
+        // this is quite ugly, must be a better way to do this..
+        if (b == buffer_size - 1 && t == n_threads - 1) {
+          break; // if it's the last in the chunk don't getline as this happens
+                 // in the while statement
+        } else if (!getline(*in, line)) { // case we are at the end of the
+                                          // reads.
+          sr_v[t].resize(b + 1);
+          threads[t] = std::thread(search_read, ref(sr_v[t]),
+                                   ref(known_barcodes), flank_edit_distance,
+                                   edit_distance, ref(search_pattern));
+          for (int t2 = t + 1; t2 < n_threads; t2++) {
+            sr_v[t2].resize(0);
+          }
+
+          goto print_result; // advance the line
+        }
       }
       // send reads to the thread
-      threads[t]=std::thread(search_read,ref(sr_v[t]),ref(known_barcodes),flank_edit_distance,edit_distance, ref(search_pattern));
+      threads[t] =
+          std::thread(search_read, ref(sr_v[t]), ref(known_barcodes),
+                      flank_edit_distance, edit_distance, ref(search_pattern));
     }
-    /**    t_ = std::time(0);   // get time now
-    now = std::localtime(&t_);
-    cout << "START-3" << asctime(now) << "\n"; 
-    **/
+
   print_result:
-    
-    for(int t=0; t < sr_v.size(); t++){ //loop over the threads and print out ther results
-      if(sr_v[t].size()>0) threads[t].join(); // wait for the threads to finish before printing
-      
-      for(int r=0; r< sr_v[t].size(); r++){ // loop over the reads
-	
-	for(int b=0; b<sr_v[t][r].vec_bc_for.size(); b++)
-	  barcode_counts[sr_v[t][r].vec_bc_for.at(b).barcode]++;
-	for(int b=0; b<sr_v[t][r].vec_bc_rev.size(); b++)
-	  barcode_counts[sr_v[t][r].vec_bc_rev.at(b).barcode]++;
-	
-	if((sr_v[t][r].vec_bc_for.size()+sr_v[t][r].vec_bc_rev.size())>0)
-	  bc_count++;
-	if((sr_v[t][r].vec_bc_for.size()+sr_v[t][r].vec_bc_rev.size())>1 ){
-	  multi_bc_count++;
-	}
-	
-	if(known_barcodes.size()!=0){ // if we are just looking for all possible barcodes don't output reads etc.
-	  
-	  print_stats(sr_v[t][r].read_id, sr_v[t][r].vec_bc_for, out_stat_file);
-	  print_stats(sr_v[t][r].read_id, sr_v[t][r].vec_bc_rev, out_stat_file);
-	  
-	  print_read(sr_v[t][r].read_id+"_+",sr_v[t][r].line,sr_v[t][r].qual_scores,sr_v[t][r].vec_bc_for,
-		     out_filename_prefix,split_file_by_barcode,found_barcodes,remove_barcodes);
-	  reverse(sr_v[t][r].qual_scores.begin(),sr_v[t][r].qual_scores.end());
-	  if(remove_barcodes || sr_v[t][r].vec_bc_for.size()==0) //case we just want to print read once if multiple bc found.
-	    print_read(sr_v[t][r].read_id+"_-",sr_v[t][r].rev_line,sr_v[t][r].qual_scores,sr_v[t][r].vec_bc_rev,
-		       out_filename_prefix,split_file_by_barcode,found_barcodes,remove_barcodes);
-	}
+    // START print_result LABEL...
+
+    // loop over the threads and print out ther results
+    for (int t = 0; t < sr_v.size(); t++) {
+      if (sr_v[t].size() > 0)
+        threads[t].join(); // wait for the threads to finish before printing
+
+      for (int r = 0; r < sr_v[t].size(); r++) { // loop over the reads
+
+        for (int b = 0; b < sr_v[t][r].vec_bc_for.size(); b++)
+          barcode_counts[sr_v[t][r].vec_bc_for.at(b).barcode]++;
+        for (int b = 0; b < sr_v[t][r].vec_bc_rev.size(); b++)
+          barcode_counts[sr_v[t][r].vec_bc_rev.at(b).barcode]++;
+
+        if ((sr_v[t][r].vec_bc_for.size() + sr_v[t][r].vec_bc_rev.size()) > 0)
+          bc_count++;
+        if ((sr_v[t][r].vec_bc_for.size() + sr_v[t][r].vec_bc_rev.size()) > 1) {
+          multi_bc_count++;
+        }
+
+        if (known_barcodes.size() !=
+            0) { // if we are just looking for all possible barcodes don't
+                 // output reads etc.
+
+          print_stats(sr_v[t][r].read_id, sr_v[t][r].vec_bc_for, out_stat_file);
+          print_stats(sr_v[t][r].read_id, sr_v[t][r].vec_bc_rev, out_stat_file);
+
+          print_read(sr_v[t][r].read_id + "_+", sr_v[t][r].line,
+                     sr_v[t][r].qual_scores, sr_v[t][r].vec_bc_for,
+                     out_filename_prefix, split_file_by_barcode, found_barcodes,
+                     remove_barcodes);
+          reverse(sr_v[t][r].qual_scores.begin(), sr_v[t][r].qual_scores.end());
+          if (remove_barcodes || sr_v[t][r].vec_bc_for.size() ==
+                                     0) // case we just want to print read once
+                                        // if multiple bc found.
+            print_read(sr_v[t][r].read_id + "_-", sr_v[t][r].rev_line,
+                       sr_v[t][r].qual_scores, sr_v[t][r].vec_bc_rev,
+                       out_filename_prefix, split_file_by_barcode,
+                       found_barcodes, remove_barcodes);
+        }
       }
     }
+
+    // END print_result LABEL
   }
+
   reads_ifs.close();
-  
+
+  // print summary statistics
   cerr << "Number of reads processed: " << r_count << "\n";
   cerr << "Number of reads where a barcode was found: " << bc_count << "\n";
-  cerr << "Number of reads where more than one barcode was found: " << multi_bc_count << "\n";
+  cerr << "Number of reads where more than one barcode was found: "
+       << multi_bc_count << "\n";
   cerr << "All done!" << endl;
 
-  if(known_barcodes.size()>0){
+  if (known_barcodes.size() > 0) {
     out_stat_file.close();
-    return(0);
+    return (0);
   }
-  
-  if(barcode_counts.size()==0)
-    return(0);
-  
+
+  if (barcode_counts.size() == 0)
+    return (0);
+
   typedef std::pair<std::string, int> pair;
   vector<pair> bc_vec;
-  copy(barcode_counts.begin(),barcode_counts.end(), back_inserter<vector<pair>>(bc_vec));
-  sort(bc_vec.begin(), bc_vec.end(),[](const pair &l, const pair &r){
+
+  copy(barcode_counts.begin(), barcode_counts.end(),
+       back_inserter<vector<pair>>(bc_vec));
+
+  sort(bc_vec.begin(), bc_vec.end(), [](const pair &l, const pair &r) {
     if (l.second != r.second)
       return l.second > r.second;
     return l.first < r.first;
   });
+
   vector<int> hist(bc_vec[0].second);
   ofstream out_bc_file;
+
   out_bc_file.open(out_bc_filename);
-  for (auto const &bc_pair: bc_vec){
+
+  for (auto const &bc_pair : bc_vec) {
     out_bc_file << bc_pair.first << "\t" << bc_pair.second << "\n";
-    hist[bc_pair.second-1]++;
+    hist[bc_pair.second - 1]++;
   }
+
   out_bc_file.close();
 
-  cout << "Reads\tBarcodes" << "\n";
-  for(int i=hist.size()-1; i>=0; i--)
-    cout << i+1 << "\t" << hist[i] << "\n";
-    
+  cout << "Reads\tBarcodes"
+       << "\n";
+  for (int i = hist.size() - 1; i >= 0; i--)
+    cout << i + 1 << "\t" << hist[i] << "\n";
 }
