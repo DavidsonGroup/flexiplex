@@ -796,7 +796,10 @@ int main(int argc, char **argv) {
         }
 
         r_count++; // progress counter
-        if (r_count % 100000 == 0) {
+        if (// display for every 10,000 reads first
+            (r_count < 100000 && r_count % 10000 == 0) ||
+            // and then every 100,000 reads after
+            (r_count % 100000 == 0)) {
           cerr << r_count / ((double)1000000) << " million reads processed.."
                << endl;
         }
