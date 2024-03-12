@@ -25,12 +25,13 @@ using namespace std;
 
 // Append .1 to version for dev code, remove for release
 // e.g. 1.00.1 (dev) goes to 1.01 (release)
-const static string VERSION="1.01"; 
+const static string VERSION="1.02.1"; 
 
 struct PredefinedStruct {
   string description;
   string params;
 };
+
 
 // predefined settings for known barcode/search schemes
 // new setting added to this map will automatically be available 
@@ -44,7 +45,6 @@ static const map< string, PredefinedStruct> predefinedMap = {
   {"grep",{"Simple grep-like search (edit distance up to 2)",
 	   "-f 2 -k ? -b \'\' -u \'\' -i false"}}  
 };
-
 
 // the help information which is printed when a user puts in the wrong
 // combination of command line options.

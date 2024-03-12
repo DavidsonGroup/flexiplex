@@ -4,3 +4,5 @@ scripts/flexiplex_filter.egg-info
 
 __pycache__/
 flexiplex
+compile_commands.json
+.cache/clangd/index
