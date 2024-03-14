@@ -5,6 +5,8 @@ import argparse
 import logging as log
 import sys
 
+from typing import Optional
+
 
 def find_bounds(df, min_=None, max_=None):
     """
@@ -34,6 +36,11 @@ def find_bounds(df, min_=None, max_=None):
 
         # select the index of the row with low_cnt as the count
         max_ = int(df[df[col] == max_cnt].iloc[[0]].index[0])
+
+    # if max is 0, search the whole space
+    elif max_ == 0:
+        max_ = len(df) - 1
+        log.info(f"Setting lower bound to value {max_}, the last read")
 
     if min_ is None:
         log.debug("Setting upper bound to the count of read rank #50")
@@ -274,7 +281,7 @@ def n_derivative(df, x, y, window_size=9):
     )
 
 
-def find_inflection(df, bounds, output_count=False):
+def find_inflection(df, bounds, output_count: Optional[int]=False):
     """
     Searches for the inflection point. This effectively minimises the
     numerical derivative as the curve is always monotonically decreasing.
@@ -393,7 +400,7 @@ def parse_args():
         metavar="<r>",
         type=int,
         required=False,
-        help="highest rank to search",
+        help="highest rank to search. set to 0 to search to the end",
     )
 
     group_inf_d = parser.add_argument_group(
@@ -454,7 +461,7 @@ def cli():
         level=log.DEBUG if args.verbose else log.INFO,
     )
 
-    log.info("FLEXIPLEX-FILTER 1.01")
+    log.info("FLEXIPLEX-FILTER 1.02")
     if args.filename == sys.stdin:
         log.info("No filename given... getting reads from stdin...")
 
@@ -482,8 +489,24 @@ def cli():
 
     add_rank_index(df)
 
+    REQUIRED_UNIQUE_COUNTS = 50
+    unique_counts = len(df["count"].unique())
+
     if args.no_inflection:
         log.debug("--no-inflection was given, skipping inflection discovery")
+        df_filt = df
+    elif (( not args.max_rank ) and ( not args.min_rank ) and ( unique_counts < REQUIRED_UNIQUE_COUNTS ) and ( not args.graph )):
+        # when there are less than REQUIRED_UNIQUE_COUNTS unique counts, we will skip inflection point finding
+        # this is so that flexiplex-filter can still work for smaller 'example' datasets without requiring
+        # manual configuration.
+        #
+        # users who want to run flexiplex-filter on small datasets are highly recommended to specify the --graph argument,
+        # visualise the dataset, and then manually determine the maximum and minimum ranks for the search.
+
+        log.info(f"Number of unique counts is too small ({unique_counts}, threshold {REQUIRED_UNIQUE_COUNTS}), skipping inflection discovery by default.")
+        log.info("To force inflection discovery, manually inspect the data and then specify the -u and -l parameters.")
+        log.info("To show the graph, pass the parameters: --graph -l 1 -u 0")
+
         df_filt = df
     else:
         rank = args.use_predetermined_rank
