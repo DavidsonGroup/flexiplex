@@ -72,8 +72,10 @@ void print_usage(){
   cerr << "     -b sequence Append the barcode pattern to search for\n";
   cerr << "     -u sequence Append the UMI pattern to search for\n";
   cerr << "     Notes:\n";
-  cerr << "          The order of these options matters\n";
-  cerr << "          ? - can be used as a wildcard\n";
+  cerr << "          The order of these options matters.\n";
+  cerr << "          ? - can be used as a wildcard.\n";
+  cerr << "          If the last pattern consists of only T or A, the polyT/A will be trimmed\n";
+  cerr << "          until the first non-T(or A for polyA tails) character.\n";
   cerr << "     When no search pattern x,b,u option is provided, the following default pattern is used: \n";
   cerr << "          primer: CTACACGACGCTCTTCCGATCT\n";
   cerr << "          barcode: ????????????????\n";
