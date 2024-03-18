@@ -239,7 +239,15 @@ Barcode get_barcode(const string & seq,
   } //fill in info about found primer and polyT location
   barcode.flank_editd=result.editDistance;
   barcode.flank_start=result.startLocations[0];
-  barcode.flank_end=seq.find_first_not_of('T', result.endLocations[0]);
+
+  // check if last element of saerch_pattern is polyT
+  if (std::all_of(search_pattern.back().second.begin(), search_pattern.back().second.end(), [](char c) { return c == 'T'; })) {
+    barcode.flank_end = seq.find_first_not_of('T', result.endLocations[0]);
+  } else if (std::all_of(search_pattern.back().second.begin(), search_pattern.back().second.end(), [](char c) { return c == 'A'; })) {
+    barcode.flank_end = seq.find_first_not_of('A', result.endLocations[0]);
+  } else {
+    barcode.flank_end=result.endLocations[0];
+  }
 
   // Extract sub-patterns from aligment directly
   std::vector<long unsigned int> subpattern_lengths;
