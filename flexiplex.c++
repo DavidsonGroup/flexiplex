@@ -62,10 +62,15 @@ void print_usage(){
   cerr << "                     including flanking sequenence and split read if multiple\n";
   cerr << "                     barcodes found (default: true).\n";
   cerr << "     -s true/false   Sort reads into separate files by barcode (default: false)\n";
-  cerr << "     -n prefix   Prefix for output filenames.\n";
-  cerr << "     -e N   Maximum edit distance to barcode (default 2).\n";
-  cerr << "     -f N   Maximum edit distance to primer+polyT (default 8).\n";
-  cerr << "     -p N   Number of threads (default: 1).\n\n";
+  cerr << "     -c true/false   Add a _C suffix to the read identifier of any chimeric reads\n";
+  cerr << "                     (default: false). For instance if,\n";
+  cerr << "                       @BC_UMI#READID_+1of2\n";
+  cerr << "                     is chimeric, it will become:\n";
+  cerr << "                       @BC_UMI#READID_+1of2_C\n";
+  cerr << "     -n prefix       Prefix for output filenames.\n";
+  cerr << "     -e N            Maximum edit distance to barcode (default 2).\n";
+  cerr << "     -f N            Maximum edit distance to primer+polyT (default 8).\n";
+  cerr << "     -p N            Number of threads (default: 1).\n\n";
   
   cerr << "  Specifying adaptor / barcode structure : \n";
   cerr << "     -x sequence Append flanking sequence to search for\n";
@@ -463,7 +468,8 @@ void print_line(string id, string read, string quals, ostream & out_stream){
 void print_read(string read_id, string read, string qual,
 		vector<Barcode> & vec_bc, string prefix,
 		bool split, unordered_set<string> & found_barcodes,
-		bool trim_barcodes){
+		bool trim_barcodes,
+    bool chimeric){
 
     auto vec_size = vec_bc.size();
 
@@ -473,6 +479,10 @@ void print_read(string read_id, string read, string qual,
       // format the new read id. Using FLAMES format.
       stringstream ss;
       ss << (b + 1) << "of" << vec_size;
+      if (chimeric) {
+        ss << "_" << "C";
+      }
+
       string barcode = vec_bc.at(b).barcode;
       string new_read_id =
           barcode + "_" + vec_bc.at(b).umi + "#" + read_id + ss.str();
@@ -579,6 +589,7 @@ int main(int argc, char **argv) {
 
   bool split_file_by_barcode = false; //(s)
   bool remove_barcodes = true;        //(r)
+  bool print_chimeric = false;        //(c)
 
   std::vector<std::pair<std::string, std::string>> search_pattern;
 
@@ -598,7 +609,7 @@ int main(int argc, char **argv) {
   vector<char *> myArgs(argv, argv + argc);
 
   while ((c = getopt(myArgs.size(), myArgs.data(),
-                     "d:k:i:b:u:x:e:f:n:s:hp:")) != EOF) {
+                     "d:k:i:b:u:x:e:f:n:s:hp:c:")) != EOF) {
     switch (c) {
     case 'd': { // d=predefined list of settings for various search/barcode
                 // schemes
@@ -711,6 +722,12 @@ int main(int argc, char **argv) {
              << known_barcodes.size() << "> " << max_split_bc << "\n";
         split_file_by_barcode = false;
       }
+      params += 2;
+      break;
+    }
+    case 'c': {
+      print_chimeric = get_bool_opt_arg(optarg);
+
       params += 2;
       break;
     }
@@ -885,20 +902,35 @@ int main(int argc, char **argv) {
           print_stats(sr_v[t][r].read_id, sr_v[t][r].vec_bc_for, out_stat_file);
           print_stats(sr_v[t][r].read_id, sr_v[t][r].vec_bc_rev, out_stat_file);
 
-          print_read(sr_v[t][r].read_id + "_+", sr_v[t][r].line,
-                     sr_v[t][r].qual_scores, sr_v[t][r].vec_bc_for,
-                     out_filename_prefix, split_file_by_barcode, found_barcodes,
-                     remove_barcodes);
+          print_read(
+            sr_v[t][r].read_id + "_+",
+            sr_v[t][r].line,
+            sr_v[t][r].qual_scores,
+            sr_v[t][r].vec_bc_for,
+            out_filename_prefix,
+            split_file_by_barcode,
+            found_barcodes,
+            remove_barcodes,
+            print_chimeric && sr_v[t][r].chimeric // include chimeric information if requested
+          );
 
-          // for a chimeric read, we first need to reverse the quality scores
-          reverse(sr_v[t][r].qual_scores.begin(), sr_v[t][r].qual_scores.end());
-          
           // case we just want to print read once if multiple bc found.
-          if (remove_barcodes || sr_v[t][r].vec_bc_for.size() == 0)
-            print_read(sr_v[t][r].read_id + "_-", sr_v[t][r].rev_line,
-                       sr_v[t][r].qual_scores, sr_v[t][r].vec_bc_rev,
-                       out_filename_prefix, split_file_by_barcode,
-                       found_barcodes, remove_barcodes);
+          if (remove_barcodes || sr_v[t][r].vec_bc_for.size() == 0) {
+            // for a chimeric read, we first need to reverse the quality scores
+            reverse(sr_v[t][r].qual_scores.begin(), sr_v[t][r].qual_scores.end());
+
+            print_read(
+              sr_v[t][r].read_id + "_-", 
+              sr_v[t][r].rev_line,
+              sr_v[t][r].qual_scores, 
+              sr_v[t][r].vec_bc_rev,
+              out_filename_prefix, 
+              split_file_by_barcode,
+              found_barcodes, 
+              remove_barcodes, 
+              print_chimeric && sr_v[t][r].chimeric // include chimeric information if requested
+            );
+          }
         }
       }
     }
@@ -952,3 +984,4 @@ int main(int argc, char **argv) {
   for (int i = hist.size() - 1; i >= 0; i--)
     cout << i + 1 << "\t" << hist[i] << "\n";
 }
+
