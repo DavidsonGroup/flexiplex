@@ -129,6 +129,8 @@ struct SearchResult {
   string rev_line;
   vector<Barcode> vec_bc_for;
   vector<Barcode> vec_bc_rev;
+  int count;
+  bool chimeric;
 };
 
 // Code for fast edit distance calculation for short sequences modified from
@@ -458,75 +460,103 @@ void print_line(string id, string read, string quals, ostream & out_stream){
 }
 
 //print fastq or fasta lines..
-void print_read(string read_id,string read, string qual,
+void print_read(string read_id, string read, string qual,
 		vector<Barcode> & vec_bc, string prefix,
 		bool split, unordered_set<string> & found_barcodes,
 		bool trim_barcodes){
-  //loop over the barcodes found... usually will just be one
-  for(int b=0; b<vec_bc.size() ; b++){
-    
-    //format the new read id. Using FLAMES format.
-    stringstream ss;
-    ss << (b+1) << "of" << vec_bc.size() ;
-    string barcode=vec_bc.at(b).barcode;
-    string new_read_id=barcode+"_"+vec_bc.at(b).umi+"#"+read_id+ss.str();
-    
-    // work out the start and end base in case multiple barcodes
-    int read_start=vec_bc.at(b).flank_end;
-    int read_length=read.length()-read_start;
-    for(int f=0; f<vec_bc.size(); f++){
-      int temp_read_length=vec_bc.at(f).flank_start-read_start;
-      if(temp_read_length>0 && temp_read_length<read_length)
-	read_length=temp_read_length;
-    }
-    string qual_new=""; //don't trim the quality scores if it's a fasta file
-    if(qual!="") qual_new=qual.substr(read_start,read_length);
-    string read_new=read.substr(read_start,read_length);
 
-    if(b==0 && !trim_barcodes){ //override if read shouldn't be cut
-      new_read_id=read_id;
-      read_new=read;
-      qual_new=qual;
-      b=vec_bc.size(); //force loop to exit after this iteration
+    auto vec_size = vec_bc.size();
+
+    //loop over the barcodes found... usually will just be one
+    for (int b = 0; b < vec_size; b++) {
+
+      // format the new read id. Using FLAMES format.
+      stringstream ss;
+      ss << (b + 1) << "of" << vec_size;
+      string barcode = vec_bc.at(b).barcode;
+      string new_read_id =
+          barcode + "_" + vec_bc.at(b).umi + "#" + read_id + ss.str();
+
+      // work out the start and end base in case multiple barcodes
+      int read_start = vec_bc.at(b).flank_end;
+      int read_length = read.length() - read_start;
+
+      for (int f = 0; f < vec_size; f++) {
+        int temp_read_length = vec_bc.at(f).flank_start - read_start;
+        if (temp_read_length > 0 && temp_read_length < read_length)
+          read_length = temp_read_length;
+      }
+      string qual_new = ""; // don't trim the quality scores if it's a fasta file
+
+      if (qual != "") {
+        qual_new = qual.substr(read_start, read_length);
+      }
+      string read_new = read.substr(read_start, read_length);
+
+      if (b == 0 && !trim_barcodes) { // override if read shouldn't be cut
+        new_read_id = read_id;
+        read_new = read;
+        qual_new = qual;
+        b = vec_size; // force loop to exit after this iteration
+      }
+
+      if (split) { // to a file if spliting by barcode
+        string outname = prefix + "_" + barcode + ".";
+        if (qual == "")
+          outname += "fasta";
+        else
+          outname += "fastq";
+        ofstream outstream;
+        if (found_barcodes.insert(barcode).second)
+          outstream.open(outname); // override file if this is the first read
+                                   // for the barcode
+        else
+          outstream.open(outname, ofstream::app); // remove file if this is the
+                                                  // first read for the barcode
+        print_line(new_read_id, read_new, qual_new, outstream);
+        outstream.close();
+      } else {
+        print_line(new_read_id, read_new, qual_new, std::cout);
+      }
     }
-    
-    if(split){ //to a file if spliting by barcode
-      string outname=prefix+"_"+barcode+".";
-      if(qual=="") outname+="fasta"; else outname+="fastq";
-      ofstream outstream;
-      if(found_barcodes.insert(barcode).second)
-	outstream.open(outname); //override file if this is the first read for the barcode
-      else
-	outstream.open(outname,ofstream::app); //remove file if this is the first read for the barcode
-      print_line(new_read_id,read_new,qual_new,outstream);
-      outstream.close();
-    } else {
-      print_line(new_read_id,read_new,qual_new,std::cout);
-    }
-  }
 }
 
 // separated out from main so that this can be run with threads
 void search_read(vector<SearchResult> & reads, unordered_set<string> & known_barcodes,
-			 int flank_edit_distance, int edit_distance,
-       const std::vector<std::pair<std::string, std::string>> &search_pattern) {
+  int flank_edit_distance, int edit_distance,
+  const std::vector<std::pair<std::string, std::string>> &search_pattern) {
   
-  for(int r=0; r<reads.size(); r++){
-    
+  for (int r=0; r<reads.size(); r++){
     //forward search
-    reads[r].vec_bc_for=big_barcode_search(reads[r].line,
-					   known_barcodes,
-					   flank_edit_distance,
-					   edit_distance,
-             search_pattern);
-    reads[r].rev_line=reads[r].line;
+    auto forward_reads = big_barcode_search(
+      reads[r].line,
+			known_barcodes,
+			flank_edit_distance,
+      edit_distance,
+      search_pattern
+    );
+
+    // get reverse complement
+    reads[r].rev_line = reads[r].line;
     reverse_compliment(reads[r].rev_line);
+
     //Check the reverse compliment of the read
-    reads[r].vec_bc_rev=big_barcode_search(reads[r].rev_line,
+    auto reverse_reads = big_barcode_search(
+        reads[r].rev_line,
 					   known_barcodes,
 					   flank_edit_distance,
 					   edit_distance,
-             search_pattern);
+             search_pattern
+    );
+
+    reads[r].vec_bc_for = forward_reads;
+    reads[r].vec_bc_rev = reverse_reads;
+
+    reads[r].count = forward_reads.size() + reverse_reads.size();
+
+    // a chimeric read occurs when there are more than 1 detected barcodes in
+    // a single read
+    reads[r].chimeric = reads[r].count > 1;
   }
 }
 
@@ -842,9 +872,9 @@ int main(int argc, char **argv) {
         for (int b = 0; b < sr_v[t][r].vec_bc_rev.size(); b++)
           barcode_counts[sr_v[t][r].vec_bc_rev.at(b).barcode]++;
 
-        if ((sr_v[t][r].vec_bc_for.size() + sr_v[t][r].vec_bc_rev.size()) > 0)
+        if (sr_v[t][r].count > 0)
           bc_count++;
-        if ((sr_v[t][r].vec_bc_for.size() + sr_v[t][r].vec_bc_rev.size()) > 1) {
+        if (sr_v[t][r].chimeric) {
           multi_bc_count++;
         }
 
@@ -859,10 +889,12 @@ int main(int argc, char **argv) {
                      sr_v[t][r].qual_scores, sr_v[t][r].vec_bc_for,
                      out_filename_prefix, split_file_by_barcode, found_barcodes,
                      remove_barcodes);
+
+          // for a chimeric read, we first need to reverse the quality scores
           reverse(sr_v[t][r].qual_scores.begin(), sr_v[t][r].qual_scores.end());
-          if (remove_barcodes || sr_v[t][r].vec_bc_for.size() ==
-                                     0) // case we just want to print read once
-                                        // if multiple bc found.
+          
+          // case we just want to print read once if multiple bc found.
+          if (remove_barcodes || sr_v[t][r].vec_bc_for.size() == 0)
             print_read(sr_v[t][r].read_id + "_-", sr_v[t][r].rev_line,
                        sr_v[t][r].qual_scores, sr_v[t][r].vec_bc_rev,
                        out_filename_prefix, split_file_by_barcode,
