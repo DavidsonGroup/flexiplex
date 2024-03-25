@@ -564,9 +564,9 @@ void search_read(vector<SearchResult> & reads, unordered_set<string> & known_bar
 
     reads[r].count = forward_reads.size() + reverse_reads.size();
 
-    // a chimeric read occurs when there are more than 1 detected barcodes in
-    // a single read
-    reads[r].chimeric = reads[r].count > 1;
+    // a chimeric read occurs when there are barcodes detected in both the forward
+    // and reverse strands.
+    reads[r].chimeric = forward_reads.size() && reverse_reads.size();
   }
 }
 
