@@ -20,9 +20,13 @@ jobs:
       - name: Run make
         run: make
 
+      - name: Get short SHA
+        id: vars
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
       - name: Save artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: build-${{ github.sha }}-${{ matrix.label }}
+          name: build-${{ steps.vars.outputs.sha_short }}-${{ matrix.label }}
           path: ./flexiplex
           retention-days: 90
