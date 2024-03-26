@@ -23,6 +23,9 @@ jobs:
       - name: Add execute permission
         run: chmod +x ./flexiplex
 
+      - name: Tar files
+        run: tar -cvf ./result.tar ./flexiplex
+
       - name: Get short SHA
         id: vars
         run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
@@ -31,6 +34,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: build-${{ steps.vars.outputs.sha_short }}-${{ matrix.label }}
-          path: ./flexiplex
+          path: ./result.tar
           compression-level: 0
           retention-days: 90
