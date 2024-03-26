@@ -20,6 +20,9 @@ jobs:
       - name: Run make
         run: make
 
+      - name: Add execute permission
+        run: chmod +x ./flexiplex
+
       - name: Get short SHA
         id: vars
         run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
@@ -29,4 +32,5 @@ jobs:
         with:
           name: build-${{ steps.vars.outputs.sha_short }}-${{ matrix.label }}
           path: ./flexiplex
+          compression-level: 0
           retention-days: 90
