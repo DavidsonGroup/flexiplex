@@ -3,7 +3,6 @@ on: [push]
 jobs:
   build:
     name: build (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         include:
@@ -12,8 +11,12 @@ jobs:
             container: quay.io/pypa/manylinux2014_x86_64
           - os: macos-14
             label: macos-arm64
+            container: macos-14-arm64
           - os: macos-latest
             label: macos-x64
+            container: macos-12
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
