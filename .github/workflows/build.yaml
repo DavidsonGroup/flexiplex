@@ -17,7 +17,7 @@ jobs:
     container: ${{ matrix.container }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Run make
         run: make
@@ -33,9 +33,8 @@ jobs:
         run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
       - name: Save artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: build-${{ steps.vars.outputs.sha_short }}-${{ matrix.label }}
           path: ./result.tar
-          compression-level: 0
           retention-days: 90
