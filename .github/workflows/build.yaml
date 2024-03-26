@@ -3,19 +3,21 @@ on: [push]
 jobs:
   build:
     name: build (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         include:
           - os: ubuntu-latest
             label: linux-x64
+            container: quay.io/pypa/manylinux2014_x86_64
           - os: macos-14
             label: macos-arm64
           - os: macos-latest
             label: macos-x64
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Run make
         run: make
@@ -28,12 +30,11 @@ jobs:
 
       - name: Get short SHA
         id: vars
-        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+        run: git config --global --add safe.directory '*' && echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
       - name: Save artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: build-${{ steps.vars.outputs.sha_short }}-${{ matrix.label }}
           path: ./result.tar
-          compression-level: 0
           retention-days: 90
