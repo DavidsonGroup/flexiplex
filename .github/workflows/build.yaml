@@ -3,47 +3,38 @@ on: [push]
 jobs:
   build:
     name: build (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         include:
           - os: ubuntu-latest
-            prefix: /usr/share/miniconda3/envs/test
-
+            label: linux-x64
+            container: quay.io/pypa/manylinux2014_x86_64
+          - os: macos-14
+            label: macos-arm64
           - os: macos-latest
-            prefix: /Users/runner/miniconda3/envs/test
-    defaults:
-      run:
-        shell: bash -el {0}
+            label: macos-x64
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Run make
+        run: make
+
+      - name: Add execute permission
+        run: chmod +x ./flexiplex
+
+      - name: Tar files
+        run: tar -cvf ./result.tar ./flexiplex
+
+      - name: Get short SHA
+        id: vars
+        run: git config --global --add safe.directory '*' && echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Save artifacts
+        uses: actions/upload-artifact@v3
         with:
-          path: 'src'
-
-      - uses: conda-incubator/setup-miniconda@v2
-        with:
-          miniforge-version: "latest"
-          python-version: 3.8
-          use-only-tar-bz2: true # for caching
-
-      # restore from cache
-      - name: Restore environment
-        id: restore-env-cache
-        uses: actions/cache/restore@v3
-        with:
-          path: ${{ matrix.prefix }}
-          key: ${{ runner.os }}-env
-
-      - name: Install conda-build
-        run: conda install conda-build
-
-      - name: Build package
-        run: conda build conda-recipe
-        working-directory: src/
-
-      - name: Save environment
-        id: save-env-cache
-        uses: actions/cache/save@v3
-        with:
-          path: ${{ matrix.prefix }}
-          key: ${{ steps.restore-env-cache.outputs.cache-primary-key }}
+          name: build-${{ steps.vars.outputs.sha_short }}-${{ matrix.label }}
+          path: ./result.tar
+          retention-days: 90
