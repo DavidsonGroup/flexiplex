@@ -72,8 +72,10 @@ void print_usage(){
   cerr << "     -b sequence Append the barcode pattern to search for\n";
   cerr << "     -u sequence Append the UMI pattern to search for\n";
   cerr << "     Notes:\n";
-  cerr << "          The order of these options matters\n";
-  cerr << "          ? - can be used as a wildcard\n";
+  cerr << "          The order of these options matters.\n";
+  cerr << "          ? - can be used as a wildcard.\n";
+  cerr << "          If the last pattern consists of only T or A, the polyT/A will be trimmed\n";
+  cerr << "          until the first non-T(or A for polyA tails) character.\n";
   cerr << "     When no search pattern x,b,u option is provided, the following default pattern is used: \n";
   cerr << "          primer: CTACACGACGCTCTTCCGATCT\n";
   cerr << "          barcode: ????????????????\n";
@@ -196,8 +198,8 @@ unsigned int edit_distance(const std::string& s1, const std::string& s2, unsigne
 // a targeted search in the region for barcode
 // Sequence seearch is performed using edlib
 
-Barcode get_barcode(string & seq,
-		    unordered_set<string> *known_barcodes,
+Barcode get_barcode(const string & seq,
+		    const unordered_set<string> &known_barcodes,
 		    int flank_max_editd,
 		    int barcode_max_editd,
         const std::vector<std::pair<std::string, std::string>> &search_pattern) {
@@ -233,13 +235,21 @@ Barcode get_barcode(string & seq,
 
   //search for the concatenated pattern
   EdlibAlignResult result = edlibAlign(search_string.c_str(), search_string.length(), seq.c_str(), seq.length(), edlibConf);
-  if(result.status != EDLIB_STATUS_OK | result.numLocations==0 ){
+  if(result.status != EDLIB_STATUS_OK || result.numLocations==0 ){
     edlibFreeAlignResult(result);
     return(barcode); // no match found - return
   } //fill in info about found primer and polyT location
   barcode.flank_editd=result.editDistance;
   barcode.flank_start=result.startLocations[0];
-  barcode.flank_end=result.endLocations[0];
+
+  // check if last element of saerch_pattern is polyT
+  if (std::all_of(search_pattern.back().second.begin(), search_pattern.back().second.end(), [](char c) { return c == 'T'; })) {
+    barcode.flank_end = seq.find_first_not_of('T', result.endLocations[0]);
+  } else if (std::all_of(search_pattern.back().second.begin(), search_pattern.back().second.end(), [](char c) { return c == 'A'; })) {
+    barcode.flank_end = seq.find_first_not_of('A', result.endLocations[0]);
+  } else {
+    barcode.flank_end=result.endLocations[0];
+  }
 
   // Extract sub-patterns from aligment directly
   std::vector<long unsigned int> subpattern_lengths;
@@ -314,7 +324,7 @@ Barcode get_barcode(string & seq,
   std::string exact_bc = seq.substr(
       read_to_subpatterns[bc_index],
       search_pattern[bc_index].second.length());
-  if (known_barcodes->size()==0 || (known_barcodes->find(exact_bc) != known_barcodes->end())){ 
+if(known_barcodes.size()==0 || (known_barcodes.find(exact_bc) != known_barcodes.end())){ 
     barcode.barcode=exact_bc;
     barcode.editd=0;
     barcode.unambiguous=true;
@@ -339,10 +349,10 @@ Barcode get_barcode(string & seq,
   std::string barcode_seq = seq.substr(left_bound, max_length);
  
   //iterate over all the known barcodes, checking each sequentially
-  unordered_set<string>::iterator known_barcodes_itr=known_barcodes->begin();
+  unordered_set<string>::const_iterator known_barcodes_itr=known_barcodes.begin();
   unsigned int editDistance, endDistance;
 
-  for(; known_barcodes_itr != known_barcodes->end(); known_barcodes_itr++){
+  for(; known_barcodes_itr != known_barcodes.end(); known_barcodes_itr++){
     search_string = *known_barcodes_itr; //known barcode to check against
     editDistance = edit_distance(barcode_seq, search_string, endDistance, barcode_max_editd);
 
@@ -352,7 +362,6 @@ Barcode get_barcode(string & seq,
       barcode.unambiguous = true;
       barcode.editd = editDistance;
       barcode.barcode = *known_barcodes_itr;
-
       if (umi_index == -1) {
         barcode.umi = "";
       } else if (umi_index == bc_index + 1) {
@@ -396,16 +405,21 @@ vector<Barcode> big_barcode_search(string & sequence, unordered_set<string> & kn
   vector<Barcode> return_vec; //vector of all the barcodes found
 
   //search for barcode
-  Barcode result=get_barcode(sequence,&known_barcodes,max_flank_editd,max_editd, search_pattern); //,ss);
+  Barcode result=get_barcode(sequence,known_barcodes,max_flank_editd,max_editd, search_pattern); //,ss);
   if(result.editd<=max_editd && result.unambiguous) //add to return vector if edit distance small enough
-    return_vec.push_back(result);
+    return_vec.emplace_back(result);
   
   //if a result was found, mask out the flanking sequence and search again in case there are more.
-  if(return_vec.size()>0){
+  if (!return_vec.empty()) {
     string masked_sequence = sequence;
-    for(int i=0; i<return_vec.size(); i++){
-      int flank_length=return_vec.at(i).flank_end-return_vec.at(i).flank_start;
-      masked_sequence.replace(return_vec.at(i).flank_start,flank_length,string(flank_length,'X'));
+    for(const auto &barcode : return_vec){
+      int flank_length;
+      if (barcode.flank_end == std::string::npos) {
+        flank_length = masked_sequence.length() - 1 - barcode.flank_start;
+      } else {
+        flank_length = barcode.flank_end - barcode.flank_start;
+      }
+      masked_sequence.replace(barcode.flank_start, flank_length,string(flank_length,'X'));
     } //recursively call this function until no more barcodes are found
     vector<Barcode> masked_res;
     masked_res=big_barcode_search(masked_sequence,known_barcodes,max_flank_editd,max_editd, search_pattern); //,ss);
@@ -440,21 +454,16 @@ void print_stats(string read_id, vector<Barcode> & vec_bc, ostream & out_stream)
   }
 }
 
-void print_line(string id, string read, string quals, ostream & out_stream){
-
-  //flag for read format
-  bool is_fastq=!(quals==""); //no quality scores passed = fasta
-
+void print_line(const string& id, const string& read, const string& quals, ostream& out_stream) {
+  const char delimiter = quals.empty() ? '>' : '@';
+  
   //output to the new read file
-    if(is_fastq)
-      out_stream << "@" << id << "\n";
-    else
-      out_stream << ">" << id << "\n";
-    out_stream << read << "\n";
-    if(is_fastq){
-      out_stream << "+" << id << "\n";
-      out_stream << quals << "\n";
-    }
+  out_stream << delimiter << id << '\n'
+             << read << '\n';
+  
+  if (!quals.empty())
+    out_stream << '+' << id << '\n'
+               << quals << '\n';
 }
 
 //print fastq or fasta lines..
@@ -472,6 +481,9 @@ void print_read(string read_id,string read, string qual,
     string new_read_id=barcode+"_"+vec_bc.at(b).umi+"#"+read_id+ss.str();
     
     // work out the start and end base in case multiple barcodes
+    if (vec_bc.at(b).flank_end == std::string::npos) {
+      continue;
+    }
     int read_start=vec_bc.at(b).flank_end;
     int read_length=read.length()-read_start;
     for(int f=0; f<vec_bc.size(); f++){
