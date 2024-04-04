@@ -324,6 +324,9 @@ Barcode get_barcode(string & seq,
       barcode.umi =
           seq.substr(read_to_subpatterns[umi_index],
                      search_pattern[umi_index].second.length());
+      // WIP: not consistent with when fuzzy barcode match
+      // should split UMI extraction into a separate function
+      barcode.umi += std::string(search_pattern[umi_index].second.length() - barcode.umi.length(), 'N');
     }
     return(barcode);
   }
@@ -359,26 +362,43 @@ Barcode get_barcode(string & seq,
         // left_bound: start of barcode_seq
         // + endDistance: end of barcode
         // i.e. start of UMI
-        barcode.umi = seq.substr(
-          left_bound + endDistance,
-          search_pattern[umi_index].second.length()
-        ); // assumes no error in UMI seq.
+        std::string umi_pad = "";
+        int umi_length;
+        if (seq.length() > left_bound + endDistance + search_pattern[umi_index].second.length()) {
+          umi_length = search_pattern[umi_index].second.length();
+        } else {
+          umi_length = seq.length() - left_bound - endDistance;
+          umi_pad = std::string(search_pattern[umi_index].second.length() - umi_length, 'N');
+        }
+        barcode.umi = seq.substr(left_bound + endDistance, umi_length) + umi_pad;
       } else if (umi_index == bc_index - 1) {
         // Use the start of BC according to edit_distance(barcode_seq, ...) and go backwords
         // read_to_subpatterns[bc_index] - OFFSET + endDistance - search_pattern[bc_index].second.length():
         // = start of BC
-        barcode.umi = seq.substr(
-          left_bound + endDistance 
-                     - search_pattern[bc_index].second.length() 
-                     - search_pattern[umi_index].second.length(),
-          search_pattern[umi_index].second.length()
-        );
+        int umi_offset = search_pattern[bc_index].second.length() + search_pattern[umi_index].second.length();
+        int umi_start = 0;
+        int umi_length = search_pattern[umi_index].second.length();
+        std::string umi_pad = "";
+        if (left_bound + endDistance >= umi_offset) {
+          // good, the read started before the UMI starts
+          umi_start = left_bound + endDistance - umi_offset;
+        } else if (umi_length > (umi_offset - left_bound - endDistance)) {
+          // the read started mid-UMI
+          umi_pad = std::string(umi_offset - left_bound - endDistance, 'N');
+          umi_length =  umi_length - (umi_offset - left_bound - endDistance);
+        } else {
+          // the read started after the UMI
+          umi_pad = umi_pad + std::string(umi_length, 'N');
+          umi_length = 0;
+        }
+        barcode.umi = umi_pad + seq.substr(umi_start, umi_length);
       } else {
         // BC and UMI not next to eachother, grab UMI according to aligment
         barcode.umi = seq.substr(
           read_to_subpatterns[umi_index],
           search_pattern[umi_index].second.length()
         ); // assumes no error in UMI seq.
+        barcode.umi += std::string(search_pattern[umi_index].second.length() - barcode.umi.length(), 'N');
       }
       
       //if perfect match is found we're done.
