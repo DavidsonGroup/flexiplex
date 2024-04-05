@@ -191,6 +191,70 @@ unsigned int edit_distance(const std::string& s1, const std::string& s2, unsigne
   return best; // return edit distance
 }
 
+// extract UMI from the read after barcode matching
+std::string get_umi(const std::string &seq,
+                    const std::vector<std::pair<std::string, std::string>> &search_pattern,
+                    const std::vector<int> &read_to_subpatterns,
+                    const int umi_index, const int bc_index,
+                    const bool sliding_window_match, // if true, use left_bound and endDistance
+                    const int left_bound,
+                    const int endDistance
+                    ) {
+
+  int umi_start, umi_length;
+  std::string umi_pad = "";
+  umi_length = search_pattern[umi_index].second.length();
+
+  if (umi_index == -1) {
+    return ""; // protocol does not have UMI
+  
+  } else if (umi_index == bc_index + 1) {
+    // UMI right after BC
+    if (sliding_window_match) {
+      umi_start = left_bound + endDistance;
+    } else {
+      umi_start = read_to_subpatterns[bc_index] + search_pattern[bc_index].second.length();
+    }
+    if (seq.length() < umi_start + umi_length) {
+      // read not long enough, pad N to the end
+      umi_length = seq.length() - umi_start;
+      umi_pad = std::string(search_pattern[umi_index].second.length() - umi_length, 'N');
+    }
+    return seq.substr(umi_start, umi_length) + umi_pad;
+
+  } else if (umi_index == bc_index - 1) {
+    // UMI right before BC
+    int bc_start = sliding_window_match ? left_bound + endDistance : read_to_subpatterns[bc_index];
+    // umi should start umi_offset bases before BC
+    int umi_offset = search_pattern[bc_index].second.length() + search_pattern[umi_index].second.length();
+    if (bc_start < umi_offset) {
+      // not enough bases before BC
+      umi_pad = std::string(umi_offset - bc_start, 'N');
+      umi_start = 0;
+      umi_length -= umi_offset - bc_start;
+    } else {
+      umi_start = bc_start - umi_offset;
+    }
+    return umi_pad + seq.substr(umi_start, umi_length);
+
+  } else {
+    // UMI not next to BC, no idea which side was truncated
+    if (read_to_subpatterns.size() > umi_index + 1) {
+      // UMI is not the last subpattern
+      // use the start of the next subpattern as the end of UMI
+      umi_start = read_to_subpatterns[umi_index];
+      umi_length = min(read_to_subpatterns[umi_index + 1] - umi_start, umi_length);
+      umi_pad = std::string(search_pattern[umi_index].second.length() - umi_length, 'N');
+      return seq.substr(umi_start, umi_length) + umi_pad;
+    } else {
+      // UMI is the last subpattern
+      umi_start = read_to_subpatterns[umi_index];
+      umi_length = min((int) seq.length() - umi_start, umi_length);
+      umi_pad = std::string(search_pattern[umi_index].second.length() - umi_length, 'N');
+      return seq.substr(umi_start, umi_length) + umi_pad;
+    }
+  }
+}
 
 // Given a string 'seq' search for substring with primer and polyT sequence followed by
 // a targeted search in the region for barcode
@@ -318,13 +382,7 @@ Barcode get_barcode(string & seq,
     barcode.barcode=exact_bc;
     barcode.editd=0;
     barcode.unambiguous=true;
-    if (umi_index == -1) {
-      barcode.umi = "";
-    } else {
-      barcode.umi =
-          seq.substr(read_to_subpatterns[umi_index],
-                     search_pattern[umi_index].second.length());
-    }
+    barcode.umi = get_umi(seq, search_pattern, read_to_subpatterns, umi_index, bc_index, false, 0, 0);
     return(barcode);
   }
   
@@ -352,34 +410,7 @@ Barcode get_barcode(string & seq,
       barcode.unambiguous = true;
       barcode.editd = editDistance;
       barcode.barcode = *known_barcodes_itr;
-
-      if (umi_index == -1) {
-        barcode.umi = "";
-      } else if (umi_index == bc_index + 1) {
-        // left_bound: start of barcode_seq
-        // + endDistance: end of barcode
-        // i.e. start of UMI
-        barcode.umi = seq.substr(
-          left_bound + endDistance,
-          search_pattern[umi_index].second.length()
-        ); // assumes no error in UMI seq.
-      } else if (umi_index == bc_index - 1) {
-        // Use the start of BC according to edit_distance(barcode_seq, ...) and go backwords
-        // read_to_subpatterns[bc_index] - OFFSET + endDistance - search_pattern[bc_index].second.length():
-        // = start of BC
-        barcode.umi = seq.substr(
-          left_bound + endDistance 
-                     - search_pattern[bc_index].second.length() 
-                     - search_pattern[umi_index].second.length(),
-          search_pattern[umi_index].second.length()
-        );
-      } else {
-        // BC and UMI not next to eachother, grab UMI according to aligment
-        barcode.umi = seq.substr(
-          read_to_subpatterns[umi_index],
-          search_pattern[umi_index].second.length()
-        ); // assumes no error in UMI seq.
-      }
+      barcode.umi = get_umi(seq, search_pattern, read_to_subpatterns, umi_index, bc_index, true, left_bound, endDistance);
       
       //if perfect match is found we're done.
       if (editDistance == 0) {
