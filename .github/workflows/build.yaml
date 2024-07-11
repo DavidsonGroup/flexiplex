@@ -13,13 +13,12 @@ jobs:
             label: macos-arm64
           - os: macos-latest
             label: macos-x64
+    env:
+      ACTIONS_RUNNER_FORCE_ACTIONS_NODE_VERSION: node16
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container }}
     steps:
-      - name: Install nodejs v20
-        if: ${{ matrix.label == 'centos-7' }}
-        run: yum install nodejs20
-        
       - name: Checkout code
         uses: actions/checkout@v3
 
