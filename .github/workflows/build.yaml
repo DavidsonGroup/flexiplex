@@ -6,8 +6,8 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: centos-7
-            label: linux-x64
+          - os: ubuntu-latest
+            label: centos-7
             container: quay.io/pypa/manylinux2014_x86_64
           - os: macos-14
             label: macos-arm64
@@ -17,7 +17,7 @@ jobs:
     container: ${{ matrix.container }}
     steps:
       - name: Install nodejs v20
-        if: ${{ matrix.os == 'centos-7' }}
+        if: ${{ matrix.label == 'centos-7' }}
         run: yum install nodejs20
         
       - name: Checkout code
