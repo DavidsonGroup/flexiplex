@@ -199,7 +199,7 @@ flexiplex -d <chemistry> -k my_filtered_barcode_list.txt reads.fastq > new_reads
 A common scenario is for no flanking sequence to be known, but the barcode to begin or end a fixed number of bases from the start or end of a read. In this instance you can add sequence to the beginnning/end to anchor the search. e.g. using "START" to anchor:
 
 ```
-cat file.fastq | sed "/[@,+]/! s/^/START/g" | flexiplex -x "START" -f 0 -b "????????????????" -e 1 -k my_barcode_list.txt
+cat file.fastq | sed "/^[@+]/! s/^/START/g" | flexiplex -x "START" -f 0 -b "????????????????" -e 1 -k my_barcode_list.txt
 ```
 Would search for 16bp barcodes from `my_barcode_list.txt` directly at the start of reads with an edit distance of 1.
 
