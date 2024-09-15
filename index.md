@@ -258,8 +258,8 @@ Flexiplex can be also be used on 10x short read data to search for cells with a 
 
 ``` 
 paste Sample_R1.fastq Sample_R2.fastq | \
-	sed "/[@,+]/! s/\t/TTTTT/g" | \
-	sed "/[@,+]/! s/^/CTACACGACGCTCTTCCGATCT/g" | \
+	sed "/^[@,+]/! s/\t/TTTTT/g" | \
+	sed "/^[@,+]/! s/^/CTACACGACGCTCTTCCGATCT/g" | \
 	flexiplex -x <variant sequence (20-40bp)> -d grep | \
 	flexiplex -d 10x3v3
 ```
