@@ -257,9 +257,9 @@ flexiplex -d <chemistry> -k barcode_list.txt reads.fasta | flexiplex -n barcode_
 Flexiplex can be also be used on 10x short read data to search for cells with a specific target sequence such as a mutation or fusion of interest from the raw read data. Here you "paste" the two read ends together and run in a similar way as you would for long reads. e.g. To search for a variant in 10x 3' data: 
 
 ``` 
-paste Sample_R1.fastq Sample_R2.fastq | sed "/[@,+]/! s/^/CTACACGACGCTCTTCCGATCT/g" | flexiplex -x <variant sequence (20-40bp)> -d grep | flexiplex -d 10x3v3
+paste -d "TTTTTTTTT" Sample_R1.fastq Sample_R2.fastq | sed "/[@,+]/! s/^/CTACACGACGCTCTTCCGATCT/g" | flexiplex -x <variant sequence (20-40bp)> -d grep | flexiplex -d 10x3v3
 ```
-This prefixes the read (before the barcodes) with the 10x primer (CTACACGACGCTCTTCCGATCT), searches for the variant, then searches for the barcode immediately after the primer and returns a list of barcodes with the variant in flexiplex_barcodes_counts.txt. The read IDs can be found in flexiplex_reads_barcodes.txt
+This prefixes the read (before the barcodes) with the 10x primer (CTACACGACGCTCTTCCGATCT) and adds some polyT sequence after the UMI (to recreate the long-read-like sequence structure). It then searches for the variant, then searches for the barcode immediately after the primer and returns a list of barcodes with the variant in flexiplex_barcodes_counts.txt. The read IDs can be found in flexiplex_reads_barcodes.txt
 
 In this example we assume no sequencing errors in the barcodes as the data is Illumina, however a barcode list could also be provided (to the final command) to error correct. The order of demuliplexing and searching can also be switched. e.g.:
 
