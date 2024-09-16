@@ -515,8 +515,9 @@ void print_read(string read_id, string read, string qual,
       }
 
       string barcode = vec_bc.at(b).barcode;
+      // also add the proper FASTQ way: \tCB:Z:barcode\tUB:Z:umi
       string new_read_id =
-          barcode + "_" + vec_bc.at(b).umi + "#" + read_id + ss.str();
+          barcode + "_" + vec_bc.at(b).umi + "#" + read_id + ss.str() + "\tCB:Z:" + barcode + "\tUB:Z:" + vec_bc[b].umi;
 
       // work out the start and end base in case multiple barcodes
       int read_start = vec_bc.at(b).flank_end;
