@@ -602,6 +602,12 @@ void search_read(vector<SearchResult> & reads, unordered_set<string> & known_bar
   }
 }
 
+// check if file already exists
+bool file_exists(const std::string &filename) {
+  std::ifstream infile(filename);
+  return infile.good();
+}
+
 // MAIN is here!!
 int main(int argc, char **argv) {
   std::ios_base::sync_with_stdio(false);
@@ -820,7 +826,11 @@ int main(int argc, char **argv) {
   params += 2;
 
   if (known_barcodes.size() > 0) {
-    out_stat_file.open(out_stat_filename);
+    if (file_exists(out_stat_filename)) {
+      cerr << "File " << out_stat_filename
+           << " already exists, overwriting." << endl;
+    }
+    out_stat_file.open(out_stat_filename, std::ios::trunc);
     out_stat_file << "Read\tCellBarcode\tFlankEditDist\tBarcodeEditDist\tUMI\n";
   }
 
