@@ -8,7 +8,6 @@ jobs:
         include:
           - os: ubuntu-latest
             label: centos-7
-            container: quay.io/pypa/manylinux2014_x86_64
           - os: macos-14
             label: macos-arm64
           - os: macos-latest
