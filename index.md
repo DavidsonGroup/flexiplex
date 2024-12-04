@@ -37,6 +37,15 @@ The primer, polyT, list of barcodes, UMI pattern and the order of these sequence
 ### Precompiled binaries
 Pre-compiled binaries are available at precompiled binaries in the [/bin subdirectory](https://github.com/DavidsonGroup/flexiplex/releases) for Linux (x64) and Mac (Apple Silicon).
 
+To run `flexiplex-filter`, it is easiest to use the [`uv` package manager](https://docs.astral.sh/uv/getting-started/installation/):
+
+```sh
+uvx --from git+https://github.com/davidsongroup/flexiplex.git#subdirectory=scripts \
+	flexiplex-filter --help
+```
+
+For all the invocations of flexiplex-filter in this documentation, you can run it using `uv` as above.
+
 ### Compiling from source
 ```sh
 # download from GitHub
@@ -178,13 +187,13 @@ gunzip -c read.fastq.gz | flexiplex -d 10x3v3 -f 0
 Flexiplex will output a table which gives the frequency of how often each barcode is observed in the data. This table will need to be filtered for high quality barcodes which are free from errors. Do automate this, Flexiplex comes bundled with a standalone python script, flexiplex-filter. Flexiplex-filter can also filter against any list of possible barcodes, such as [the possible 10x barcodes](https://kb.10xgenomics.com/hc/en-us/articles/115004506263-What-is-a-barcode-whitelist-).
 > 
 > ```
-> scripts/flexiplex_filter/main.py --whitelist 3M-february-2018.txt --no-inflection --outfile my_filtered_barcode_list.txt my_barcode_list.txt
+> flexiplex-filter --whitelist 3M-february-2018.txt --no-inflection --outfile my_filtered_barcode_list.txt my_barcode_list.txt
 > ```
 > 
 > This script also allows for the discovery and visualisation of points of inflection in a single cell knee plot. A brief 'autopilot' mode is provided which will determine an inflection point and filter out any cells with a lower count:
 > 
 > ```
-> scripts/flexiplex_filter/main.py --whitelist 3M-february-2018.txt --outfile my_filtered_barcode_list.txt my_barcode_list.txt
+> flexiplex-filter --whitelist 3M-february-2018.txt --outfile my_filtered_barcode_list.txt my_barcode_list.txt
 > ```
 > 
 > **[The usage guide](https://github.com/DavidsonGroup/flexiplex/tree/main/scripts/usage.md) explains how to further use `filter-filter` to visualise and fine-tune the inflection point result.**
