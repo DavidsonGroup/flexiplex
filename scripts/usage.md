@@ -16,7 +16,7 @@
 
 ## Arguments
 ```
-usage: filter-barcodes.py [-h] [-v] [-o <file>] [--dry-run] [--no-inflection]
+usage: flexiplex-filter   [-h] [-v] [-o <file>] [--dry-run] [--no-inflection]
                           [-l <r>] [-u <r>] [-g] [--list-points <n>]
                           [--use-predetermined-rank <r>] [-w <file>]
                           [filename]
@@ -62,20 +62,16 @@ filter by whitelist file:
 ```
 
 ## Installation
-The script is designed to be minimal and depends on only `numpy` and `pandas`. `matplotlib` is optional, and is used for the graphing functionality.
+The recommended way to run flexiplex-filter is to use the [`uv` package manager](https://docs.astral.sh/uv/getting-started/installation/):
 
-```bash
-$ wget -O https://github.com/DavidsonGroup/flexiplex/blob/filters/scripts/filter-barcodes.py
-$ python filter_barcodes.py
+```sh
+uvx --from git+https://github.com/davidsongroup/flexiplex.git#subdirectory=scripts \
+    flexiplex-filter --help
 ```
 
-or even, to avoid downloading,
+A `requirements.txt` is provided as well for reproducibility: `pip install -r requirements.txt` or `conda install --file requirements.txt`. The script is designed to be minimal and depends on only `numpy` and `pandas`. `matplotlib` is optional, and is used for the graphing functionality. 
 
-```bash
-$ curl https://github.com/DavidsonGroup/flexiplex/blob/filters/scripts/filter-barcodes.py | python -
-```
-
-A `requirements.txt` is provided as well for reproducibility: `pip install -r requirements.txt` or `conda install --file requirements.txt`.
+Python 3.7 or greater is required.
 
 ## Autopilot
 This script has sensible defaults which can automatically find an 'approximate' inflection point and perform whitelist filtering for you. It will never edit your files in-place and will always output to `stdout` or a given output file.
@@ -94,7 +90,7 @@ This automatic inflection will, by default, use:
 These can be overriden using the `-l` and `-u` parameters, if your dataset is small or needs fine-tuning.
 
 ```bash
-$ python filter_barcodes.py --outfile output.txt flexiplex_barcodes_counts.txt
+$ flexiplex-filter --outfile output.txt flexiplex_barcodes_counts.txt
 
 Rank of inflection point: 182
 ```
@@ -108,7 +104,7 @@ The `--whitelist <file>` argument will read a plaintext file of newline-separate
 As inflection point discovery is on by default, the `--no-inflection` argument should be used to disable it. This will just perform a whitelist filter.
 
 ```bash
-$ python filter_barcodes.py --whitelist 3M-february-2018.txt --no-inflection --outfile output.txt flexiplex_barcodes_counts.txt
+$ flexiplex-filter --whitelist 3M-february-2018.txt --no-inflection --outfile output.txt flexiplex_barcodes_counts.txt
 
 Filtered with whitelist, removed 656317 out of 766589 barcodes (85% of all barcodes)
 ```
@@ -121,7 +117,7 @@ $ sort <(gunzip -c 3M-february-2018.txt.gz) <(cut -f1 flexiplex_barcodes_counts.
 
 ### Whitelist filtering and inflection point discovery
 ```bash
-$ python filter_barcodes.py --whitelist 3M-february-2018.txt --outfile output.txt flexiplex_barcodes_counts.txt
+$ flexiplex-filter --whitelist 3M-february-2018.txt --outfile output.txt flexiplex_barcodes_counts.txt
 
 Filtered with whitelist, removed 656317 out of 766589 barcodes (85% of all barcodes)
 Rank of inflection point: 182
@@ -140,7 +136,7 @@ The extremes of the data tend to be sparsely populated and not very appropriate 
 In the below example, the corresponding count is also given. Note that the minimum rank represents the largest count, and vice versa. Thus, the barcode with rank 20 will have a count of 72575, and the barcode with rank 1000 has a count of 365. The discovered inflection point will necessarily have a rank between 20 and 1000.
 
 ```bash
-$ python filter-barcodes.py -l 20 -u 1000 --verbose [...]
+$ flexiplex-filter -l 20 -u 1000 --verbose [...]
 
 --list-points not given, setting it to 10
 No whitelist file given, skipping
@@ -153,7 +149,7 @@ Bounds interval: ranks [20, 1000] -> counts [365, 72575]
 If an optimal inflection point has already been determined, passing the `--use-predetermined-rank` $r$ argument will disable inflection point discovery and will instead filter all ranks $\leq r$.
 
 ```bash
-$ python filter-barcodes.py --use-predetermined-rank 532 ...
+$ flexiplex-filter --use-predetermined-rank 532 ...
 
 Using predetermined rank, not initiating discovery
 Rank of inflection point: 532
@@ -168,7 +164,7 @@ $$\frac{d\log_{10}(\text{count})}{d\log_{10}(\text{rank})}\approx \frac{\Delta\l
  Observe that in the following example, there are two distinct 'neighbourhoods' which could contain an inflection point: $r \approx 805$ and $r \approx 830$. 
 
 ```
-$ python filter-barcodes.py --list-points 10 ...
+$ flexiplex-filter --list-points 10 ...
 
 Setting --dry-run as --list-points was given
 
@@ -199,7 +195,7 @@ Passing the `--graph` option will create a knee plot of the ranks compared with 
 This requires a windowed environment and is not suitable for a headless computing setup.
 
 ```bash
-$ python filter-barcodes.py --graph ...
+$ flexiplex-filter --graph ...
 [Figure 1]
 ```
 
