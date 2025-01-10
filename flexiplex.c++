@@ -25,7 +25,7 @@ using namespace std;
 
 // Append .1 to version for dev code, remove for release
 // e.g. 1.00.1 (dev) goes to 1.01 (release)
-const static string VERSION="1.02.1"; 
+const static string VERSION="1.02.2"; 
 
 struct PredefinedStruct {
   string description;
@@ -95,7 +95,11 @@ void print_usage(){
   }
   cerr << "\n     -h     Print this usage information.\n\n";
   cerr << "Have a different barcode scheme you would like Flexiplex to work with? Post a request at:\n" ;
-  cerr << "https://github.com/DavidsonGroup/flexiplex/issues\n" ;
+  cerr << "https://github.com/DavidsonGroup/flexiplex/issues\n\n" ;
+
+  cerr << "If you use Flexiplex in your research, please cite our paper:\n" ;
+  cerr << "O. Cheng et al., Flexiplex: a versatile demultiplexer and search tool for omics data, Bioinformatics, Volume 40, Issue 3, 2024 \n";
+
   cerr << endl;
 }
 
@@ -431,6 +435,7 @@ Barcode get_barcode(string & seq,
 
 //search a read for one or more barcodes (parent function that calls get_barcode)
 vector<Barcode> big_barcode_search(string & sequence, unordered_set<string> & known_barcodes, int max_flank_editd, int max_editd, const std::vector<std::pair<std::string, std::string>> &search_pattern) {
+
   vector<Barcode> return_vec; //vector of all the barcodes found
 
   //search for barcode
@@ -449,8 +454,8 @@ vector<Barcode> big_barcode_search(string & sequence, unordered_set<string> & kn
     masked_res=big_barcode_search(masked_sequence,known_barcodes,max_flank_editd,max_editd, search_pattern); //,ss);
     return_vec.insert(return_vec.end(),masked_res.begin(),masked_res.end()); //add to result
   }
-    
   return(return_vec);
+    
 }
 
 // utility function to check true/false input options
@@ -531,6 +536,10 @@ void print_read(string read_id, string read, string qual,
       string qual_new = ""; // don't trim the quality scores if it's a fasta file
 
       if (qual != "") {
+	if(qual.length()!=read_length){
+	  cerr << "WARNING: sequence and quality lengths diff for read: " << read_id << ". Ignoring read." << endl;
+	  return;
+	}
         qual_new = qual.substr(read_start, read_length);
       }
       string read_new = read.substr(read_start, read_length);
@@ -572,8 +581,8 @@ void search_read(vector<SearchResult> & reads, unordered_set<string> & known_bar
     //forward search
     auto forward_reads = big_barcode_search(
       reads[r].line,
-			known_barcodes,
-			flank_edit_distance,
+      known_barcodes,
+      flank_edit_distance,
       edit_distance,
       search_pattern
     );
@@ -585,10 +594,10 @@ void search_read(vector<SearchResult> & reads, unordered_set<string> & known_bar
     //Check the reverse compliment of the read
     auto reverse_reads = big_barcode_search(
         reads[r].rev_line,
-					   known_barcodes,
-					   flank_edit_distance,
-					   edit_distance,
-             search_pattern
+	known_barcodes,
+	flank_edit_distance,
+	edit_distance,
+        search_pattern
     );
 
     reads[r].vec_bc_for = forward_reads;
@@ -607,7 +616,7 @@ int main(int argc, char **argv) {
   std::ios_base::sync_with_stdio(false);
 
   cerr << "FLEXIPLEX " << VERSION << "\n";
-
+  
   // Variables to store user options
   // Set these to their defaults
   int expected_cells = 0;      //(d)
@@ -859,7 +868,7 @@ int main(int argc, char **argv) {
         string read_id;
 
         istringstream line_stream(read_id_line);
-        line_stream >> sr.read_id;
+	line_stream >> sr.read_id;
         sr.read_id.erase(0, 1);
 
         if (!is_fastq) { // fasta (account for multi-lines per read)
@@ -978,7 +987,8 @@ int main(int argc, char **argv) {
   cerr << "Number of reads where more than one barcode was found: "
        << multi_bc_count << "\n";
   cerr << "All done!" << endl;
-
+  cerr << "If you like Flexiplex, please cite us! https://doi.org/10.1093/bioinformatics/btae102" << endl;
+  
   if (known_barcodes.size() > 0) {
     out_stat_file.close();
     return (0);
