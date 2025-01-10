@@ -536,7 +536,7 @@ void print_read(string read_id, string read, string qual,
       string qual_new = ""; // don't trim the quality scores if it's a fasta file
 
       if (qual != "") {
-	if(qual.length()!=read_length){
+	if((read_start+read_length)>(qual.length())){
 	  cerr << "WARNING: sequence and quality lengths diff for read: " << read_id << ". Ignoring read." << endl;
 	  return;
 	}
