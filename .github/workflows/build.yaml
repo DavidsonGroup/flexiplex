@@ -19,7 +19,7 @@ jobs:
     container: ${{ matrix.container }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Run make
         run: make
@@ -35,7 +35,7 @@ jobs:
         run: git config --global --add safe.directory '*' && echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
       - name: Save artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: build-${{ steps.vars.outputs.sha_short }}-${{ matrix.label }}
           path: ./result.tar
