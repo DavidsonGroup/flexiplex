@@ -276,7 +276,7 @@ def n_derivative(df, x, y, window_size=9):
             (
                 diff_orig[-half_size:] if half_size != 0 else []
             ),  # if half_size is 0, this would just double the array
-            [np.NaN],
+            [np.nan],
         )
     )
 
