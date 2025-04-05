@@ -42,9 +42,21 @@ To run `flexiplex-filter`, it is easiest to use the [`uv` package manager](https
 ```sh
 uvx --from git+https://github.com/davidsongroup/flexiplex.git#subdirectory=scripts \
 	flexiplex-filter --help
-```
+``` 
 
 For all the invocations of flexiplex-filter in this documentation, you can run it using `uv` as above.
+
+Alternatively, you can install inside a virtual environment. flexiplex-filter has been tested on Python 3.9, but should work for relatively modern versions of Python.
+
+```sh
+cd <path_to_flexiplex_dir>/scripts
+python -m venv .venv
+source .venv/bin/activate
+pip install .
+
+# now you can run:
+flexiplex-filter <parameters>
+```
 
 ### Compiling from source
 ```sh
