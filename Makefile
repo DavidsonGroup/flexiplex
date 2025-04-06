@@ -1,7 +1,7 @@
 CXX?=g++
 
 # set DIR to /usr/local/bin if not given through env
-DIR?=/usr/local/bin
+DIR?=bin
 PYTHON?=python3
 
 all: flexiplex
