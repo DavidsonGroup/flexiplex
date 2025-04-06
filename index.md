@@ -49,9 +49,14 @@ For all the invocations of flexiplex-filter in this documentation, you can run i
 Alternatively, you can install inside a virtual environment. flexiplex-filter has been tested on Python 3.9, but should work for relatively modern versions of Python.
 
 ```sh
+# create virtual environment
 cd <path_to_flexiplex_dir>/scripts
 python -m venv .venv
+
+# activate virtual environment (you must do this every time you run flexiplex-filter)
 source .venv/bin/activate
+
+# install
 pip install .
 
 # now you can run:
