@@ -103,8 +103,8 @@ void print_usage(){
   cerr << endl;
 }
 
-// compliment nucleotides - used to reverse compliment string
-char compliment(char& c){
+// complement nucleotides - used to reverse complement string
+char complement(char& c){
   switch(c){
   case 'A' : return 'T';
   case 'T' : return 'A';
@@ -114,10 +114,10 @@ char compliment(char& c){
   }
 }
 
-//Inplace reverse compliment
-void reverse_compliment(string & seq){
+//Inplace reverse complement
+void reverse_complement(string & seq){
    reverse(seq.begin(),seq.end());
-   transform(seq.begin(),seq.end(),seq.begin(),compliment);
+   transform(seq.begin(),seq.end(),seq.begin(),complement);
 }
 
 //Holds the found barcode and associated information
@@ -589,9 +589,9 @@ void search_read(vector<SearchResult> & reads, unordered_set<string> & known_bar
 
     // get reverse complement
     reads[r].rev_line = reads[r].line;
-    reverse_compliment(reads[r].rev_line);
+    reverse_complement(reads[r].rev_line);
 
-    //Check the reverse compliment of the read
+    //Check the reverse complement of the read
     auto reverse_reads = big_barcode_search(
         reads[r].rev_line,
 	known_barcodes,
