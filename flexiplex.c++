@@ -826,7 +826,6 @@ int main(int argc, char **argv) {
   ofstream out_stat_file;
   out_stat_filename = out_filename_prefix + "_" + out_stat_filename;
   out_bc_filename = out_filename_prefix + "_" + out_bc_filename;
-  params += 2;
 
   if (known_barcodes.size() > 0) {
     out_stat_file.open(out_stat_filename);
