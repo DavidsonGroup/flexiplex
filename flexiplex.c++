@@ -1,4 +1,4 @@
-// Copyright 2023 Nadia Davidson 
+// Copyright 2023 Nadia Davidson
 // This program is distributed under the MIT License.
 // We also ask that you cite this software in publications
 // where you made use of it for any part of the data analysis.
@@ -25,7 +25,7 @@ using namespace std;
 
 // Append .1 to version for dev code, remove for release
 // e.g. 1.00.1 (dev) goes to 1.01 (release)
-const static string VERSION="1.02.2"; 
+const static string VERSION="1.02.3";
 
 struct PredefinedStruct {
   string description;
@@ -34,8 +34,8 @@ struct PredefinedStruct {
 
 
 // predefined settings for known barcode/search schemes
-// new setting added to this map will automatically be available 
-static const map< string, PredefinedStruct> predefinedMap = { 
+// new setting added to this map will automatically be available
+static const map< string, PredefinedStruct> predefinedMap = {
   {"10x3v3", {"10x version 3 chemistry 3'", //option string and description for help information
 	      "-x CTACACGACGCTCTTCCGATCT -b ???????????????? -u ???????????? -x TTTTTTTTT -f 8 -e 2"}}, //settings
   {"10x3v2",{"10x version 2 chemistry 3'",
@@ -43,21 +43,21 @@ static const map< string, PredefinedStruct> predefinedMap = {
   {"10x5v2",{"10x version 2 chemistry 5'",
 	     "-x CTACACGACGCTCTTCCGATCT -b ???????????????? -u ?????????? -x TTTCTTATATGGG -f 8 -e 2"}},
   {"grep",{"Simple grep-like search (edit distance up to 2)",
-	   "-f 2 -k ? -b \'\' -u \'\' -i false"}}  
+	   "-f 2 -k ? -b \'\' -u \'\' -i false"}}
 };
 
 // the help information which is printed when a user puts in the wrong
 // combination of command line options.
 void print_usage(){
   cerr << "usage: flexiplex [options] [reads_input]\n\n";
-  
+
   cerr << "  reads_input: a .fastq or .fasta file. Will read from stdin if empty.\n\n";
 
   cerr << "  options: \n";
-  cerr << "     -k known_list   Either 1) a text file of expected barcodes in the first column,\n"; 
+  cerr << "     -k known_list   Either 1) a text file of expected barcodes in the first column,\n";
   cerr << "                     one row per barcode, or 2) a comma separate string of barcodes.\n";
   cerr << "                     Without this option, flexiplex will search and report possible barcodes.\n";
-  cerr << "                     The generated list can be used for known_list in subsequent runs.\n"; 
+  cerr << "                     The generated list can be used for known_list in subsequent runs.\n";
   cerr << "     -i true/false   Replace read ID with barcodes+UMI, remove search strings\n";
   cerr << "                     including flanking sequenence and split read if multiple\n";
   cerr << "                     barcodes found (default: true).\n";
@@ -71,7 +71,7 @@ void print_usage(){
   cerr << "     -e N            Maximum edit distance to barcode (default 2).\n";
   cerr << "     -f N            Maximum edit distance to primer+polyT (default 8).\n";
   cerr << "     -p N            Number of threads (default: 1).\n\n";
-  
+
   cerr << "  Specifying adaptor / barcode structure : \n";
   cerr << "     -x sequence Append flanking sequence to search for\n";
   cerr << "     -b sequence Append the barcode pattern to search for\n";
@@ -86,7 +86,7 @@ void print_usage(){
   cerr << "          polyT: TTTTTTTTT\n";
   cerr << "     which is the same as providing: \n";
   cerr << "         -x CTACACGACGCTCTTCCGATCT -b ???????????????? -u ???????????? -x TTTTTTTTT\n\n";
-  
+
   cerr << "  Predefined search schemes:\n";
   auto pds_itr = predefinedMap.begin();
   for(; pds_itr!=predefinedMap.end(); pds_itr++){
@@ -103,8 +103,8 @@ void print_usage(){
   cerr << endl;
 }
 
-// compliment nucleotides - used to reverse compliment string
-char compliment(char& c){
+// complement nucleotides - used to reverse complement string
+char complement(char& c){
   switch(c){
   case 'A' : return 'T';
   case 'T' : return 'A';
@@ -114,13 +114,13 @@ char compliment(char& c){
   }
 }
 
-//Inplace reverse compliment
-void reverse_compliment(string & seq){
+//Inplace reverse complement
+void reverse_complement(string & seq){
    reverse(seq.begin(),seq.end());
-   transform(seq.begin(),seq.end(),seq.begin(),compliment);
+   transform(seq.begin(),seq.end(),seq.begin(),complement);
 }
 
-//Holds the found barcode and associated information 
+//Holds the found barcode and associated information
 struct Barcode {
   string barcode;
   string umi;
@@ -146,7 +146,7 @@ struct SearchResult {
 // https://en.wikibooks.org/wiki/Algorithm_Implementation/Strings/Levenshtein_distance#C++
 // s2 is always assumned to be the shorter string (barcode)
 unsigned int edit_distance(const std::string& s1, const std::string& s2, unsigned int &end, int max_editd){
-  
+
   std::size_t len1 = s1.size()+1, len2 = s2.size()+1;
   const char * s1_c = s1.c_str(); const char * s2_c = s2.c_str();
 
@@ -157,7 +157,7 @@ unsigned int edit_distance(const std::string& s1, const std::string& s2, unsigne
   dist_holder[0]=0; //[0][0]
   for(unsigned int j = 1; j < len2; ++j) dist_holder[j] = j; //[0][j];
   for(unsigned int i = 1; i < len1; ++i) dist_holder[i*len2] = 0; //[i][0];
-    
+
   int best=len2;
   end=len1-1;
 
@@ -218,7 +218,7 @@ std::string get_umi(const std::string &seq,
 
   if (umi_index == -1) {
     return ""; // protocol does not have UMI
-  
+
   } else if (umi_index == bc_index + 1) {
     // UMI right after BC
     if (sliding_window_match) {
@@ -276,7 +276,7 @@ Barcode get_barcode(string & seq,
 		    int flank_max_editd,
 		    int barcode_max_editd,
         const std::vector<std::pair<std::string, std::string>> &search_pattern) {
-  
+
   const int OFFSET=5; //wiggle room in bases of the expected barcode start site to search.
 
   //initialise struct variables for return:
@@ -339,7 +339,7 @@ Barcode get_barcode(string & seq,
   // 0 for match
   // 1 for insertion to target
   // 2 for insertion to query
-  // 3 for mismatch 
+  // 3 for mismatch
   std::vector<unsigned char> alignment_vector(result.alignment, result.alignment + result.alignmentLength);
   for (const auto& value : alignment_vector) {
     if (value != 1) {
@@ -355,7 +355,7 @@ Barcode get_barcode(string & seq,
   }
 
   edlibFreeAlignResult(result);
-  
+
 
   // Work out the index of BC and UMI in the pattern
   // TODO: Should this be done in main to be more efficient?
@@ -384,19 +384,19 @@ Barcode get_barcode(string & seq,
 
   //if not checking against known list of barcodes, return sequence after the primer
   //also check for a perfect match straight up as this will save computer later.
-  // 
+  //
   // read_to_subpatterns[subpattern_index] gives start of subpattern in the read
   std::string exact_bc = seq.substr(
       read_to_subpatterns[bc_index],
       search_pattern[bc_index].second.length());
-  if (known_barcodes->size()==0 || (known_barcodes->find(exact_bc) != known_barcodes->end())){ 
+  if (known_barcodes->size()==0 || (known_barcodes->find(exact_bc) != known_barcodes->end())){
     barcode.barcode=exact_bc;
     barcode.editd=0;
     barcode.unambiguous=true;
     barcode.umi = get_umi(seq, search_pattern, read_to_subpatterns, umi_index, bc_index, false, 0, 0);
     return(barcode);
   }
-  
+
   // otherwise widen our search space and the look for matches with errors
 
   int left_bound = max(
@@ -406,7 +406,7 @@ Barcode get_barcode(string & seq,
   int max_length = search_pattern[bc_index].second.length() + 2 * OFFSET;
 
   std::string barcode_seq = seq.substr(left_bound, max_length);
- 
+
   //iterate over all the known barcodes, checking each sequentially
   unordered_set<string>::iterator known_barcodes_itr=known_barcodes->begin();
   unsigned int editDistance, endDistance;
@@ -416,13 +416,13 @@ Barcode get_barcode(string & seq,
     editDistance = edit_distance(barcode_seq, search_string, endDistance, barcode_max_editd);
 
     if (editDistance == barcode.editd) {
-      barcode.unambiguous = false;    
+      barcode.unambiguous = false;
     } else if (editDistance < barcode.editd && editDistance <= barcode_max_editd) { // if best so far, update
       barcode.unambiguous = true;
       barcode.editd = editDistance;
       barcode.barcode = *known_barcodes_itr;
       barcode.umi = get_umi(seq, search_pattern, read_to_subpatterns, umi_index, bc_index, true, left_bound, endDistance);
-      
+
       //if perfect match is found we're done.
       if (editDistance == 0) {
       	return(barcode);
@@ -442,7 +442,7 @@ vector<Barcode> big_barcode_search(string & sequence, unordered_set<string> & kn
   Barcode result=get_barcode(sequence,&known_barcodes,max_flank_editd,max_editd, search_pattern); //,ss);
   if(result.editd<=max_editd && result.unambiguous) //add to return vector if edit distance small enough
     return_vec.push_back(result);
-  
+
   //if a result was found, mask out the flanking sequence and search again in case there are more.
   if(return_vec.size()>0){
     string masked_sequence = sequence;
@@ -455,21 +455,21 @@ vector<Barcode> big_barcode_search(string & sequence, unordered_set<string> & kn
     return_vec.insert(return_vec.end(),masked_res.begin(),masked_res.end()); //add to result
   }
   return(return_vec);
-    
+
 }
 
 // utility function to check true/false input options
 bool get_bool_opt_arg(string value){
   transform(value.begin(), value.end(), value.begin(), ::tolower);
-  if( value.compare("true")==0 | value.compare("t")==0 | value.compare("1")==0){
+  if (value.compare("true")==0 || value.compare("t")==0 || value.compare("1")==0){
     return true;
-  } else if (value.compare("false")!=0 | value.compare("f")!=0 | value.compare("0")!=0){
+  } else if (value.compare("false")==0 || value.compare("f")==0 || value.compare("0")==0){
     return false;
   } else {
     cerr << "Unknown argument to boolean option\n";
     print_usage();
     exit(1);
-  } 
+  }
 }
 
 // print information about barcodes
@@ -576,7 +576,7 @@ void print_read(string read_id, string read, string qual,
 void search_read(vector<SearchResult> & reads, unordered_set<string> & known_barcodes,
   int flank_edit_distance, int edit_distance,
   const std::vector<std::pair<std::string, std::string>> &search_pattern) {
-  
+
   for (int r=0; r<reads.size(); r++){
     //forward search
     auto forward_reads = big_barcode_search(
@@ -589,9 +589,9 @@ void search_read(vector<SearchResult> & reads, unordered_set<string> & known_bar
 
     // get reverse complement
     reads[r].rev_line = reads[r].line;
-    reverse_compliment(reads[r].rev_line);
+    reverse_complement(reads[r].rev_line);
 
-    //Check the reverse compliment of the read
+    //Check the reverse complement of the read
     auto reverse_reads = big_barcode_search(
         reads[r].rev_line,
 	known_barcodes,
@@ -616,7 +616,7 @@ int main(int argc, char **argv) {
   std::ios_base::sync_with_stdio(false);
 
   cerr << "FLEXIPLEX " << VERSION << "\n";
-  
+
   // Variables to store user options
   // Set these to their defaults
   int expected_cells = 0;      //(d)
@@ -826,7 +826,6 @@ int main(int argc, char **argv) {
   ofstream out_stat_file;
   out_stat_filename = out_filename_prefix + "_" + out_stat_filename;
   out_bc_filename = out_filename_prefix + "_" + out_bc_filename;
-  params += 2;
 
   if (known_barcodes.size() > 0) {
     out_stat_file.open(out_stat_filename);
@@ -961,14 +960,14 @@ int main(int argc, char **argv) {
             reverse(sr_v[t][r].qual_scores.begin(), sr_v[t][r].qual_scores.end());
 
             print_read(
-              sr_v[t][r].read_id + "_-", 
+              sr_v[t][r].read_id + "_-",
               sr_v[t][r].rev_line,
-              sr_v[t][r].qual_scores, 
+              sr_v[t][r].qual_scores,
               sr_v[t][r].vec_bc_rev,
-              out_filename_prefix, 
+              out_filename_prefix,
               split_file_by_barcode,
-              found_barcodes, 
-              remove_barcodes, 
+              found_barcodes,
+              remove_barcodes,
               print_chimeric && sr_v[t][r].chimeric // include chimeric information if requested
             );
           }
@@ -988,7 +987,7 @@ int main(int argc, char **argv) {
        << multi_bc_count << "\n";
   cerr << "All done!" << endl;
   cerr << "If you like Flexiplex, please cite us! https://doi.org/10.1093/bioinformatics/btae102" << endl;
-  
+
   if (known_barcodes.size() > 0) {
     out_stat_file.close();
     return (0);
