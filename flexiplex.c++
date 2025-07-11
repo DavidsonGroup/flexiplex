@@ -306,6 +306,11 @@ Barcode get_barcode(string & seq,
     search_string += pair.second;
   }
 
+  // shorter than the pattern, skip search
+  if (seq.length() < search_string.length()) {
+    return barcode;
+  }
+
   //search for the concatenated pattern
   EdlibAlignResult result = edlibAlign(search_string.c_str(), search_string.length(), seq.c_str(), seq.length(), edlibConf);
   if(result.status != EDLIB_STATUS_OK | result.numLocations==0 ){
