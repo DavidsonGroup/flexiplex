@@ -545,9 +545,11 @@ void print_read(string read_id, string read, string qual,
 	  cerr << "WARNING: sequence and quality lengths diff for read: " << read_id << ". Ignoring read." << endl;
 	  return;
 	}
-        qual_new = qual.substr(read_start, read_length);
+        // note: read_start+1, see issue #63
+        qual_new = qual.substr(read_start+1, read_length);
       }
-      string read_new = read.substr(read_start, read_length);
+      // note: read_start+1, see issue #63
+      string read_new = read.substr(read_start+1, read_length);
 
       if (b == 0 && !trim_barcodes) { // override if read shouldn't be cut
         new_read_id = read_id;
