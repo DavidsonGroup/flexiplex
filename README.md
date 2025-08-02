@@ -40,9 +40,9 @@ For usage information type `flexiplex -h` and `flexiplex-filter -h`.
 
 ## Installation
 
-Precompiled binaries for Flexiplex are located in `bin/`. You can also install Flexiplex using Anaconda: `conda install -c bioconda -c conda-forge flexiplex`
+Precompiled binaries for Flexiplex are located in the [Releases](https://github.com/DavidsonGroup/flexiplex/releases) section. You can also install Flexiplex using Anaconda: `conda install -c bioconda -c conda-forge flexiplex`
 
-flexiplex-filter can be installed locally using Make, but we recommend using the [`uv` package manager](https://docs.astral.sh/uv/getting-started/installation/). Just invoke flexiplex-filter using
+flexiplex-filter can be installed locally using Make, but we recommend using the [`uv` package manager](https://docs.astral.sh/uv/getting-started/installation/), which will automatically manage dependencies in a temporary virtualenv. Just invoke flexiplex-filter using
 
 ```sh
 uvx --from git+https://github.com/davidsongroup/flexiplex.git#subdirectory=scripts \
