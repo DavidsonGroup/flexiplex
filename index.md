@@ -35,9 +35,9 @@ The primer, polyT, list of barcodes, UMI pattern and the order of these sequence
 
 # Installing flexiplex
 ### Precompiled binaries
-Pre-compiled binaries are available at precompiled binaries in the [/bin subdirectory](https://github.com/DavidsonGroup/flexiplex/releases) for Linux (x64) and Mac (Apple Silicon).
+Pre-compiled binaries are available in the [Releases](https://github.com/DavidsonGroup/flexiplex/releases) for Linux (x64) and Mac (Apple Silicon).
 
-To run `flexiplex-filter`, it is easiest to use the [`uv` package manager](https://docs.astral.sh/uv/getting-started/installation/):
+To run `flexiplex-filter`, it is easiest to use the [`uv` package manager](https://docs.astral.sh/uv/getting-started/installation/), which handles all dependencies in a temporary virtual environment:
 
 ```sh
 uvx --from git+https://github.com/davidsongroup/flexiplex.git#subdirectory=scripts \
