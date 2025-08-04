@@ -25,7 +25,7 @@ using namespace std;
 
 // Append .1 to version for dev code, remove for release
 // e.g. 1.00.1 (dev) goes to 1.01 (release)
-const static string VERSION="1.02.4";
+const static string VERSION="1.02.5";
 
 struct PredefinedStruct {
   string description;
@@ -488,10 +488,7 @@ void print_stats(string read_id, vector<Barcode> & vec_bc, ostream & out_stream)
   }
 }
 
-void print_line(string id, string read, string quals, ostream & out_stream){
-
-  //flag for read format
-  bool is_fastq=!(quals==""); //no quality scores passed = fasta
+void print_line(string id, string read, string quals, bool is_fastq, ostream & out_stream){
 
   //output to the new read file
     if(is_fastq)
@@ -510,7 +507,7 @@ void print_read(string read_id, string read, string qual,
 		vector<Barcode> & vec_bc, string prefix,
 		bool split, unordered_set<string> & found_barcodes,
 		bool trim_barcodes,
-    bool chimeric){
+    bool chimeric, bool is_fastq){
 
     auto vec_size = vec_bc.size();
 
@@ -543,9 +540,9 @@ void print_read(string read_id, string read, string qual,
 
       if (qual != "") {
         if((read_start+read_length)>(qual.length())) {
-	  cerr << "WARNING: sequence and quality lengths diff for read: " << read_id << ". Ignoring read." << endl;
-	  return;
-	}
+          cerr << "WARNING: sequence and quality lengths diff for read: " << read_id << ". Ignoring read." << endl;
+          return;
+        }
         qual_new = qual.substr(read_start, read_length);
       }
       string read_new = read.substr(read_start, read_length);
@@ -570,10 +567,10 @@ void print_read(string read_id, string read, string qual,
         else
           outstream.open(outname, ofstream::app); // remove file if this is the
                                                   // first read for the barcode
-        print_line(new_read_id, read_new, qual_new, outstream);
+        print_line(new_read_id, read_new, qual_new, is_fastq, outstream);
         outstream.close();
       } else {
-        print_line(new_read_id, read_new, qual_new, std::cout);
+        print_line(new_read_id, read_new, qual_new, is_fastq, std::cout);
       }
     }
 }
@@ -967,7 +964,8 @@ int main(int argc, char **argv) {
             split_file_by_barcode,
             found_barcodes,
             remove_barcodes,
-            print_chimeric && sr_v[t][r].chimeric // include chimeric information if requested
+            print_chimeric && sr_v[t][r].chimeric, // include chimeric information if requested
+            is_fastq
           );
 
           // case we just want to print read once if multiple bc found.
@@ -984,7 +982,8 @@ int main(int argc, char **argv) {
               split_file_by_barcode,
               found_barcodes,
               remove_barcodes,
-              print_chimeric && sr_v[t][r].chimeric // include chimeric information if requested
+              print_chimeric && sr_v[t][r].chimeric, // include chimeric information if requested
+              is_fastq
             );
           }
         }
