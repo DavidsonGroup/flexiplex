@@ -554,6 +554,11 @@ void print_read(string read_id, string read, string qual,
         b = vec_size; // force loop to exit after this iteration
       }
 
+      // Skip reads that become empty after trimming
+      if (read_new.length() == 0) {
+        continue;
+      }
+
       if (split) { // to a file if splitting by barcode
         string outname = prefix + "_" + barcode + ".";
         if (qual == "")
