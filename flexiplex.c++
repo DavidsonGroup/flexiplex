@@ -530,7 +530,8 @@ void print_read(string read_id, string read, string qual,
           barcode + "_" + vec_bc.at(b).umi + "#" + read_id + ss.str() + "\tCB:Z:" + barcode + "\tUB:Z:" + vec_bc[b].umi;
 
       // work out the start and end base in case multiple barcodes
-      int read_start = vec_bc.at(b).flank_end;
+      // note: read_start+1, see issue #63
+      int read_start = vec_bc.at(b).flank_end + 1;
       int read_length = read.length() - read_start;
 
       for (int f = 0; f < vec_size; f++) {
@@ -541,15 +542,13 @@ void print_read(string read_id, string read, string qual,
       string qual_new = ""; // don't trim the quality scores if it's a fasta file
 
       if (qual != "") {
-	if((read_start+read_length)>(qual.length())){
+        if((read_start+read_length)>(qual.length())) {
 	  cerr << "WARNING: sequence and quality lengths diff for read: " << read_id << ". Ignoring read." << endl;
 	  return;
 	}
-        // note: read_start+1, see issue #63
-        qual_new = qual.substr(read_start+1, read_length);
+        qual_new = qual.substr(read_start, read_length);
       }
-      // note: read_start+1, see issue #63
-      string read_new = read.substr(read_start+1, read_length);
+      string read_new = read.substr(read_start, read_length);
 
       if (b == 0 && !trim_barcodes) { // override if read shouldn't be cut
         new_read_id = read_id;
@@ -558,7 +557,7 @@ void print_read(string read_id, string read, string qual,
         b = vec_size; // force loop to exit after this iteration
       }
 
-      if (split) { // to a file if spliting by barcode
+      if (split) { // to a file if splitting by barcode
         string outname = prefix + "_" + barcode + ".";
         if (qual == "")
           outname += "fasta";
