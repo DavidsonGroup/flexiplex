@@ -27,6 +27,9 @@ jobs:
       - name: Add execute permission
         run: chmod +x ./flexiplex
 
+      - name: Run tests
+        run: make test
+
       - name: Tar files
         run: tar -cvf ./result.tar ./flexiplex
 

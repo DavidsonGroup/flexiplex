@@ -4,6 +4,8 @@ CXX?=g++
 DIR?=bin
 PYTHON?=python3
 
+.PHONY: test clean install uninstall
+
 all: flexiplex
 
 flexiplex: flexiplex.c++ 
@@ -15,6 +17,9 @@ clean:
 install:
 	cp flexiplex ${DIR}
 	${PYTHON} -m pip install scripts/
+
+test: flexiplex
+	@bash -c "if diff --color tests/output.fastq <(./flexiplex -k tests/barcodes.txt -b GGGG -x TTT tests/input.fastq 2>/dev/null); then echo 'Test success'; else echo 'Test fail'; fi"
 
 uninstall:
 	rm ${DIR}/flexiplex
