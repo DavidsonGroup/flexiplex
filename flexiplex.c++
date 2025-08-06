@@ -533,7 +533,7 @@ void print_read(string read_id, string read, string qual,
 
       for (int f = 0; f < vec_size; f++) {
         int temp_read_length = vec_bc.at(f).flank_start - read_start;
-        if (temp_read_length > 0 && temp_read_length < read_length)
+        if (temp_read_length >= 0 && temp_read_length < read_length)
           read_length = temp_read_length;
       }
       string qual_new = ""; // don't trim the quality scores if it's a fasta file
