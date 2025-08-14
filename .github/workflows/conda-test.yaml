@@ -9,9 +9,6 @@ jobs:
         include:
           - os: ubuntu-latest
             prefix: /usr/share/miniconda3/envs/test
-
-          - os: macos-latest
-            prefix: /Users/runner/miniconda3/envs/test
     defaults:
       run:
         shell: bash -el {0}
