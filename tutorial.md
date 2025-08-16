@@ -6,7 +6,7 @@ permalink: /tutorial.html
 
 # Long-read single-cell tutorial
 
-This tutorial shows a **minimal**, workflow for long-read single-cell RNA-seq for the tools flexiplex and nailpolish:
+This tutorial shows a simple workflow for pre-processing long-read single-cell RNA-seq using our tools flexiplex and nailpolish:
 
 1. Extract 10x barcodes from long-read single-cell data using **flexiplex**  
 2. Use **flexiplex-filter** to find the knee point and shortlist barcodes  
@@ -18,7 +18,7 @@ This tutorial shows a **minimal**, workflow for long-read single-cell RNA-seq fo
 
 ---
 
-## Prerequisites (install)
+## Prerequisites
 
 This tutorial assumes that you have already installed the required software:
  * [**flexiplex** and **flexiplex-filter**](index.html)
@@ -31,8 +31,11 @@ You will also need to download the demo dataset:
 ```bash
 wget .....scmixology2_250k.fastq.gz
 ```
+This dataset comes from scmixology2 from []() and rebase called by [](). It contains sequencing single cell data from a mixture of 5
+lung cancer cells lines sequenced using 10x 3' version 3 and Oxford Nanopore Technologies. 
+We have subset down to just 250 thousand reads from the 250 most variable genes, to make the tutrial run in a reasonable time.
 
-and the reference annotation data:
+You will also need to download the human reference transcriptome:
 ```bash
 wget https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_48/gencode.v48.transcripts.fa.gz
 gunzip gencode.v48.transcripts.fa.gz
@@ -120,5 +123,49 @@ Now we have a short-list of barcodes, we can run flexiplex a second time to actu
 ```bash
 gunzip -c scmixology2_250k.fastq.gz | flexiplex -d 10x3v3 -k flexiplex_barcodes_final.txt > scmixology2_250k.demultiplexed.fastq
 ```
+
+The output of this look like:
+```
+FLEXIPLEX 1.02.1
+Using predefined settings for 10x3v3.
+Adding flank sequence to search for: CTACACGACGCTCTTCCGATCT
+Setting barcode to search for: ????????????????
+Setting UMI to search for: ????????????
+Adding flank sequence to search for: TTTTTTTTT
+Setting max flanking sequence edit distance to 8
+Setting max barcode edit distance to 2
+Setting known barcodes from flexiplex_barcodes_final.txt
+Number of known barcodes: 180
+For usage information type: flexiplex -h
+No filename given... getting reads from stdin...
+Searching for barcodes...
+0.01 million reads processed..
+0.02 million reads processed..
+0.03 million reads processed..
+0.04 million reads processed..
+0.05 million reads processed..
+0.06 million reads processed..
+0.07 million reads processed..
+0.08 million reads processed..
+0.09 million reads processed..
+0.1 million reads processed..
+0.2 million reads processed..
+Number of reads processed: 250000
+Number of reads where a barcode was found: 213458
+Number of reads where more than one barcode was found: 14570
+All done!
+```
+And you see that we are able to find barcodes in 84% if reads. The read ID now contains the barcode and UMI information needed for downstream analysis:
+scmixology2_250k.demultiplexed.fastq
+```bash
+head scmixology2_250k.demultiplexed.fastq
+@GCCCGAACAATACCCA_GCATAAATTGTA#82f7a317-c081-4d86-bbb3-60926dce0db9_+1of1
+TTTTTTTTTTTTTTTGTATTTTTAGTAGAGACGGGGTTTCACCATATTGGCCAGGCTGGTCTCGAACTCCTGACCTCATCATCCACCTGCCTTAGCCTCCCAAAATGCTGGGATTACAGGCATGAGCCACCGCACCCGGCCAGGAATTGCTTCTTATGGATGAACAAAGAAAATAGTTTCCTGAGATGGTATCTACTCTGTGAAGATGCACAACATTGTTGAAATGACAACAAAGGATCTGAATATTACATAAACTTGTTGATAAAAACAGTGGCAGGGTTTGAGATCATTGATTCAGTTTTGAAAGAAGTTCTACTGTGGGTAAAAATGCCATCAAACAGCATCACATGCTGCAGAGAAATCTTTCATGAAAGGAAGAATCAATCGATATGTATCCTCCATTTTGTCTTATTTTAAAAATTTGCCACAGCCACTCCAACCTTCAGTAACTACTACCTTGATCTGTCAGCAGCCATCAACATCAAGGCAACAGACCCTCCCACCAGCAAAAAAATTACAACTTGCTGAAGGCTCAGATGATCATTACCATTTTTTAACAATATTTTAAGATAGGTGTGTACATTGTTTTTAGACATAATCTATTGCATACTTAATAGACTTCTACAGTAATAGTGCAAAACATAACCTTTATGTACACTAGGGAACCAAAAATTTACACGTGACTCCTTTTATTTTGATGGTCTGGAACTGAGTCCACAGTATCTCCAAGGTATGCCTATATTGACTGATGAATAAACAAAATGTGGTATAGCCATACAATGGAATATTGTTCAGTCACAAAAAGAATAACATTCTGATACATGCTACAACATAGATGAACCTTGAAAATATTATGCTAAGTGAAAGAAGTCAGACACAAAAGACAAGTATTATATGATTCCATTTATATAAAATGTCCAGGATAGTCAAATCAACGAGAGACCAAAAAGTAGATTAATGGTTGACAGAGGCTGAAGGTAGGGAGGAAATGGGGAGTGACTTTAATGGGTACAGGGTTTTAGATAAAAGAAAATGTTCTGGAATTAGTGGTGATGCACAACCTTGTACAACCTTTTTGCAATATAGTGCAATAAGACAATATTGTACAATCTTGTTTATATACTAAAGCCATTAAATTACACACTTTAAAGGGTGCATTTTATGACATGGGAAGTGTACATTAAAAATAAATAACCCCATGTACTCTGCGTTGATACCACTGCTTGGCCATTAGGCCTGTAAACAATACGTAACTTG
+...
+```
+
+# 2. Deduplication and polishing
+
+
 
 
