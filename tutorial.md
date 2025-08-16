@@ -1,37 +1,40 @@
 ---
-title: Long-read single-cell quickstart
+title: Long-read single-cell quickstart tutorial
 layout: default
 permalink: /tutorial.html
 ---
 
-# Long-read single-cell quickstart
+# Long-read single-cell quickstart tutorial
 
-This walkthrough shows a **minimal**, end-to-end pipeline for long-read single-cell RNA-seq:
+This tutorial shows a **minimal**, workflow for long-read single-cell RNA-seq for the tools flexiplex and nailpolish:
 
-1. Extract 10x barcodes from long-read sc data  
-2. Use `flexiplex-filter` to find the knee point and shortlist barcodes  
-3. Demultiplex reads with `flexiplex`  
-4. Clean & deduplicate with **nailpolish** (barcode + UMI consensus)  
-5. Quantify in **oarfish** (single-cell mode) to get a count matrix  
-6. Load counts in **R/Seurat** and plot a UMAP
-
-> Tested on Linux/macOS. Commands are intentionally short and copy-pasteable.
+1. Extract 10x barcodes from long-read single-cell data using **flexiplex**  
+2. Use **flexiplex-filter** to find the knee point and shortlist barcodes  
+3. Demultiplex reads with **flexiplex**  
+4. Clean reads and deduplicate UMIs with **nailpolish**
+5. Align to a reference using **minimap2**
+6. Quantify in **oarfish** (single-cell mode) to get a count matrix  
+7. Load counts in **R/Seurat** and plot a UMAP
 
 ---
 
-## Prerequisites (quick install)
+## Prerequisites (install)
 
-We’ll install the core tools with `conda` and use the latest **nailpolish** binary.
+This tutorial assumes that you have already installed the required software:
+ * [**flexiplex** and **flexiplex-filter**](index.html)
+ * [**nailpolish**](https://davidsongroup.github.io/nailpolish/quickstart.html)
+ * [**minimap2**](https://github.com/lh3/minimap2)
+ * [**oarfish**](https://github.com/COMBINE-lab/oarfish)
+ * [**R** and **seurat**](https://satijalab.org/seurat/articles/install_v5.html)
 
-```bash
-# (Recommended) new env
-mamba create -n lrsc -c conda-forge -c bioconda \
-  flexiplex oarfish minimap2 samtools coreutils pigz -y
-mamba activate lrsc
+You will also need to download the [**demo data**]()
 
-# flexiplex-filter (installed with flexiplex via conda) OR run via uv:
-# uvx --from git+https://github.com/davidsongroup/flexiplex.git#subdirectory=scripts flexiplex-filter --help
+## 1. Barcode discovery
+First we will need to find out which single-cell barcodes are present in the dataset. 
 
-# nailpolish (download latest nightly or release for your platform)
-curl -L "https://github.com/DavidsonGroup/nailpolish/releases/download/nightly_develop/nailpolish" -o nailpolish
-chmod +x nailpolish
+
+
+
+
+
+
