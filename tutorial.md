@@ -28,14 +28,15 @@ This tutorial assumes that you have already installed the required software:
  * [**R** and **seurat**](https://satijalab.org/seurat/articles/install_v5.html)
 
 You will also need to download the [**demo data**]()
-```wget .....scmixology2_250k.fastq.gz
+```bash
+wget .....scmixology2_250k.fastq.gz
 ```
 
 Reference data (hg38 **chr1**):
-```
+```bash
 wget https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_48/gencode.v48.transcripts.fa.gz
 gunzip gencode.v48.transcripts.fa.gz
-``
+```
 
 
 
@@ -43,9 +44,9 @@ gunzip gencode.v48.transcripts.fa.gz
 First we will need to find out which single-cell barcodes are present in the dataset. 
 
 
-```
+```bash
 gunzip -c scmixology2_250k.fastq.gz | ../flexiplex/bin/flexiplex-linux -d 10x3v3 -f 0 > 1_flexiplex_out
-'''
+```
 The output should look something like:
 ```
 FLEXIPLEX 1.02.1
@@ -75,7 +76,7 @@ Number of reads processed: 250000
 Number of reads where a barcode was found: 112261
 Number of reads where more than one barcode was found: 3975
 All done!
-'''
+```
 You'll see that the number of reads where a barcode was found is less than half, but this is okay because we have selected just the best quality read (-f 0 means no sequencing errors in the flank around the barcode).
 
 The key output from this step is a file called "flexiplex_barcodes_counts.txt" which lists the number of reads for each barcode, and will be used for generating a knee plot in the next step.
@@ -91,8 +92,9 @@ AGCGCCACAATCCAGT	907
 GCCCAGACAACACAAA	881
 ATGCCTCGTCAAGCCC	867
 ...
-'''
+```
 
+## 1. Barcode filtering
 
 
 
