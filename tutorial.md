@@ -4,7 +4,7 @@ layout: default
 permalink: /tutorial.html
 ---
 
-# Long-read single-cell quickstart tutorial
+# Long-read single-cell tutorial
 
 This tutorial shows a **minimal**, workflow for long-read single-cell RNA-seq for the tools flexiplex and nailpolish:
 
@@ -27,17 +27,16 @@ This tutorial assumes that you have already installed the required software:
  * [**oarfish**](https://github.com/COMBINE-lab/oarfish)
  * [**R** and **seurat**](https://satijalab.org/seurat/articles/install_v5.html)
 
-You will also need to download the [**demo data**]()
+You will also need to download the demo dataset:
 ```bash
 wget .....scmixology2_250k.fastq.gz
 ```
 
-Reference data (hg38 **chr1**):
+and the reference annotation data:
 ```bash
 wget https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_48/gencode.v48.transcripts.fa.gz
 gunzip gencode.v48.transcripts.fa.gz
 ```
-
 
 
 ## 1. Barcode discovery
@@ -111,7 +110,7 @@ It's always a good idea to manually check that flexiplex-filter has choosen the 
 flexiplex-filter -g flexiplex_barcodes_counts.txt
 ```
 In this case, is appear to have choosen correct.
-[image]
+![flexiplex-filter graph](/flexiplex/docs/assets/tutorial.flexiplex-filter.png)
 
 In our example, flexiplex-filter picks the 180 more frequent barcodes, which is close to the number of cells known in this dataset. The process above will also work for samples with many more cells, and has been tested on datasets with tens of thousands of cells.
 
