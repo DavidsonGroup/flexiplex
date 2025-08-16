@@ -28,8 +28,7 @@ This tutorial assumes that you have already installed the required software:
  * [**R** and **seurat**](https://satijalab.org/seurat/articles/install_v5.html)
 
 You will also need to download the [**demo data**]()
-```wget .....
-gunzip 
+```wget .....scmixology2_250k.fastq.gz
 ```
 
 Reference data (hg38 **chr1**):
@@ -44,7 +43,55 @@ gunzip gencode.v48.transcripts.fa.gz
 First we will need to find out which single-cell barcodes are present in the dataset. 
 
 
+```
+gunzip -c scmixology2_250k.fastq.gz | ../flexiplex/bin/flexiplex-linux -d 10x3v3 -f 0 > 1_flexiplex_out
+'''
+The output should look something like:
+```
+FLEXIPLEX 1.02.1
+Using predefined settings for 10x3v3.
+Adding flank sequence to search for: CTACACGACGCTCTTCCGATCT
+Setting barcode to search for: ????????????????
+Setting UMI to search for: ????????????
+Adding flank sequence to search for: TTTTTTTTT
+Setting max flanking sequence edit distance to 8
+Setting max barcode edit distance to 2
+Setting max flanking sequence edit distance to 0
+For usage information type: flexiplex -h
+No filename given... getting reads from stdin...
+Searching for barcodes...
+0.01 million reads processed..
+0.02 million reads processed..
+0.03 million reads processed..
+0.04 million reads processed..
+0.05 million reads processed..
+0.06 million reads processed..
+0.07 million reads processed..
+0.08 million reads processed..
+0.09 million reads processed..
+0.1 million reads processed..
+0.2 million reads processed..
+Number of reads processed: 250000
+Number of reads where a barcode was found: 112261
+Number of reads where more than one barcode was found: 3975
+All done!
+'''
+You'll see that the number of reads where a barcode was found is less than half, but this is okay because we have selected just the best quality read (-f 0 means no sequencing errors in the flank around the barcode).
 
+The key output from this step is a file called "flexiplex_barcodes_counts.txt" which lists the number of reads for each barcode, and will be used for generating a knee plot in the next step.
+```
+CTCCGATCATGGCCAC	1090
+CATCGCTCAAGTAGTA	1050
+GGGACCTTCTTGATTC	1025
+TCATTTGTCACGGTCG	1009
+GGAGGATTCTTCTAAC	946
+AATCACGGTCCTCCTA	943
+ATAGACCCACCGTCTT	923
+AGCGCCACAATCCAGT	907
+GCCCAGACAACACAAA	881
+ATGCCTCGTCAAGCCC	867
+...
+'''
 
 
 
