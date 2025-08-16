@@ -41,11 +41,10 @@ gunzip gencode.v48.transcripts.fa.gz
 
 
 ## 1. Barcode discovery
-First we will need to find out which single-cell barcodes are present in the dataset. 
-
+First we will need to find out which single-cell barcodes are present in the dataset, which can be done by running **flexiplex** in discovery mode (with the barcode list paramter, -k, missing):
 
 ```bash
-gunzip -c scmixology2_250k.fastq.gz | ../flexiplex/bin/flexiplex-linux -d 10x3v3 -f 0 > 1_flexiplex_out
+gunzip -c scmixology2_250k.fastq.gz | flexiplex -d 10x3v3 -f 0 > 1_flexiplex.out
 ```
 The output should look something like:
 ```
@@ -94,7 +93,33 @@ ATGCCTCGTCAAGCCC	867
 ...
 ```
 
-## 1. Barcode filtering
+## 2. Barcode filtering
 
+Now, we are ready to refine the barcode list to a short-list of high quality barcodes. **flexiplex-filter** is a python script packaged with flexiplex that will automatically identify the inflection point of the barcode knee plot, and (optionally) remove barcode not seen in known list - such as the inclusion lists provided by Cell Ranger. Check the flexiplex documentaion carefully to make sure you've correctly installed it, as it requires an extra step beyond the installiton of **flexiplex**.
+
+To run:
+```bash
+flexiplex-filter flexiplex_barcodes_counts.txt > flexiplex_barcodes_final.txt
+```
+Optionally, if you have an inclusion list from Cell Ranger (but this is not required):
+```bash
+flexiplex-filter -w [inclusion_list] flexiplex_barcodes_counts.txt > flexiplex_barcodes_final.txt
+```
+
+It's always a good idea to manually check that flexiplex-filter has choosen the correct inflection point. This can be done by generating an interactive plot of the barcode frequencies:
+```bash
+flexiplex-filter -g flexiplex_barcodes_counts.txt
+```
+In this case, is appear to have choosen correct.
+[image]
+
+In our example, flexiplex-filter picks the 180 more frequent barcodes, which is close to the number of cells known in this dataset. The process above will also work for samples with many more cells, and has been tested on datasets with tens of thousands of cells.
+
+# 2. Barcode demultiplexing
+
+Now we have a short-list of barcodes, we can run flexiplex a second time to actually assign read to cellular barcodes:
+```bash
+gunzip -c scmixology2_250k.fastq.gz | flexiplex -d 10x3v3 -k flexiplex_barcodes_final.txt > scmixology2_250k.demultiplexed.fastq
+```
 
 
