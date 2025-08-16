@@ -28,6 +28,17 @@ This tutorial assumes that you have already installed the required software:
  * [**R** and **seurat**](https://satijalab.org/seurat/articles/install_v5.html)
 
 You will also need to download the [**demo data**]()
+```wget .....
+gunzip 
+```
+
+Reference data (hg38 **chr1**):
+```
+wget https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_48/gencode.v48.transcripts.fa.gz
+gunzip gencode.v48.transcripts.fa.gz
+``
+
+
 
 ## 1. Barcode discovery
 First we will need to find out which single-cell barcodes are present in the dataset. 
