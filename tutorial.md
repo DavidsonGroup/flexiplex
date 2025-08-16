@@ -18,7 +18,7 @@ This tutorial shows a simple workflow for pre-processing long-read single-cell R
 
 ---
 
-## Prerequisites
+## 0. Prerequisites
 
 This tutorial assumes that you have already installed the required software:
  * [**flexiplex** and **flexiplex-filter**](index.html)
@@ -50,7 +50,7 @@ gunzip -c scmixology2_250k.fastq.gz | flexiplex -d 10x3v3 -f 0 > 1_flexiplex.out
 ```
 The output should look something like:
 ```
-FLEXIPLEX 1.02.1
+FLEXIPLEX 1.02.5
 Using predefined settings for 10x3v3.
 Adding flank sequence to search for: CTACACGACGCTCTTCCGATCT
 Setting barcode to search for: ????????????????
@@ -75,7 +75,7 @@ Searching for barcodes...
 0.2 million reads processed..
 Number of reads processed: 250000
 Number of reads where a barcode was found: 112261
-Number of reads where more than one barcode was found: 3975
+Number of reads where more than one barcode was found: 1422
 All done!
 ```
 You'll see that the number of reads where a barcode was found is less than half, but this is okay because we have selected just the best quality read (-f 0 means no sequencing errors in the flank around the barcode).
@@ -117,7 +117,7 @@ In this case, is appear to have choosen correct.
 
 In our example, flexiplex-filter picks the 180 more frequent barcodes, which is close to the number of cells known in this dataset. The process above will also work for samples with many more cells, and has been tested on datasets with tens of thousands of cells.
 
-# 2. Barcode demultiplexing
+## 3. Barcode demultiplexing
 
 Now we have a short-list of barcodes, we can run flexiplex a second time to actually assign read to cellular barcodes:
 ```bash
@@ -126,7 +126,7 @@ gunzip -c scmixology2_250k.fastq.gz | flexiplex -d 10x3v3 -k flexiplex_barcodes_
 
 The output of this look like:
 ```
-FLEXIPLEX 1.02.1
+FLEXIPLEX 1.02.5
 Using predefined settings for 10x3v3.
 Adding flank sequence to search for: CTACACGACGCTCTTCCGATCT
 Setting barcode to search for: ????????????????
@@ -138,6 +138,7 @@ Setting known barcodes from flexiplex_barcodes_final.txt
 Number of known barcodes: 180
 For usage information type: flexiplex -h
 No filename given... getting reads from stdin...
+File flexiplex_reads_barcodes.txt already exists, overwriting.
 Searching for barcodes...
 0.01 million reads processed..
 0.02 million reads processed..
@@ -152,20 +153,51 @@ Searching for barcodes...
 0.2 million reads processed..
 Number of reads processed: 250000
 Number of reads where a barcode was found: 213458
-Number of reads where more than one barcode was found: 14570
+Number of reads where more than one barcode was found: 5923
 All done!
 ```
 And you see that we are able to find barcodes in 84% if reads. The read ID now contains the barcode and UMI information needed for downstream analysis:
 scmixology2_250k.demultiplexed.fastq
 ```bash
-head scmixology2_250k.demultiplexed.fastq
-@GCCCGAACAATACCCA_GCATAAATTGTA#82f7a317-c081-4d86-bbb3-60926dce0db9_+1of1
-TTTTTTTTTTTTTTTGTATTTTTAGTAGAGACGGGGTTTCACCATATTGGCCAGGCTGGTCTCGAACTCCTGACCTCATCATCCACCTGCCTTAGCCTCCCAAAATGCTGGGATTACAGGCATGAGCCACCGCACCCGGCCAGGAATTGCTTCTTATGGATGAACAAAGAAAATAGTTTCCTGAGATGGTATCTACTCTGTGAAGATGCACAACATTGTTGAAATGACAACAAAGGATCTGAATATTACATAAACTTGTTGATAAAAACAGTGGCAGGGTTTGAGATCATTGATTCAGTTTTGAAAGAAGTTCTACTGTGGGTAAAAATGCCATCAAACAGCATCACATGCTGCAGAGAAATCTTTCATGAAAGGAAGAATCAATCGATATGTATCCTCCATTTTGTCTTATTTTAAAAATTTGCCACAGCCACTCCAACCTTCAGTAACTACTACCTTGATCTGTCAGCAGCCATCAACATCAAGGCAACAGACCCTCCCACCAGCAAAAAAATTACAACTTGCTGAAGGCTCAGATGATCATTACCATTTTTTAACAATATTTTAAGATAGGTGTGTACATTGTTTTTAGACATAATCTATTGCATACTTAATAGACTTCTACAGTAATAGTGCAAAACATAACCTTTATGTACACTAGGGAACCAAAAATTTACACGTGACTCCTTTTATTTTGATGGTCTGGAACTGAGTCCACAGTATCTCCAAGGTATGCCTATATTGACTGATGAATAAACAAAATGTGGTATAGCCATACAATGGAATATTGTTCAGTCACAAAAAGAATAACATTCTGATACATGCTACAACATAGATGAACCTTGAAAATATTATGCTAAGTGAAAGAAGTCAGACACAAAAGACAAGTATTATATGATTCCATTTATATAAAATGTCCAGGATAGTCAAATCAACGAGAGACCAAAAAGTAGATTAATGGTTGACAGAGGCTGAAGGTAGGGAGGAAATGGGGAGTGACTTTAATGGGTACAGGGTTTTAGATAAAAGAAAATGTTCTGGAATTAGTGGTGATGCACAACCTTGTACAACCTTTTTGCAATATAGTGCAATAAGACAATATTGTACAATCTTGTTTATATACTAAAGCCATTAAATTACACACTTTAAAGGGTGCATTTTATGACATGGGAAGTGTACATTAAAAATAAATAACCCCATGTACTCTGCGTTGATACCACTGCTTGGCCATTAGGCCTGTAAACAATACGTAACTTG
+@GCCCGAACAATACCCA_GCATAAATTGTA#82f7a317-c081-4d86-bbb3-60926dce0db9_+1of1	CB:Z:GCCCGAACAATACCCA	UB:Z:GCATAAATTGTA
+TTTTTTTTTTTTTTGTATTTTTAGTAGAGACGGGGTTTCACCATATTGGCCAGGCTGGTCTCGAACTCCTGACCTCATCATCCACCTGCCTTAGCCTCCCAAAATGCTGGGATTACAGGCATGAGCCACCGCACCCGGCCAGGAATTGCTTCTTATGGATGAACAAAGAAAATAGTTTCCTGAGATGGTATCTACTCTGTGAAGATGCACAACATTGTTGAAATGACAACAAAGGATCTGAATATTACATAAACTTGTTGATAAAAACAGTGGCAGGGTTTGAGATCATTGATTCAGTTTTGAAAGAAGTTCTACTGTGGGTAAAAATGCCATCAAACAGCATCACATGCTGCAGAGAAATCTTTCATGAAAGGAAGAATCAATCGATATGTATCCTCCATTTTGTCTTATTTTAAAAATTTGCCACAGCCACTCCAACCTTCAGTAACTACTACCTTGATCTGTCAGCAGCCATCAACATCAAGGCAACAGACCCTCCCACCAGCAAAAAAATTACAACTTGCTGAAGGCTCAGATGATCATTACCATTTTTTAACAATATTTTAAGATAGGTGTGTACATTGTTTTTAGACATAATCTATTGCATACTTAATAGACTTCTACAGTAATAGTGCAAAACATAACCTTTATGTACACTAGGGAACCAAAAATTTACACGTGACTCCTTTTATTTTGATGGTCTGGAACTGAGTCCACAGTATCTCCAAGGTATGCCTATATTGACTGATGAATAAACAAAATGTGGTATAGCCATACAATGGAATATTGTTCAGTCACAAAAAGAATAACATTCTGATACATGCTACAACATAGATGAACCTTGAAAATATTATGCTAAGTGAAAGAAGTCAGACACAAAAGACAAGTATTATATGATTCCATTTATATAAAATGTCCAGGATAGTCAAATCAACGAGAGACCAAAAAGTAGATTAATGGTTGACAGAGGCTGAAGGTAGGGAGGAAATGGGGAGTGACTTTAATGGGTACAGGGTTTTAGATAAAAGAAAATGTTCTGGAATTAGTGGTGATGCACAACCTTGTACAACCTTTTTGCAATATAGTGCAATAAGACAATATTGTACAATCTTGTTTATATACTAAAGCCATTAAATTACACACTTTAAAGGGTGCATTTTATGACATGGGAAGTGTACATTAAAAATAAATAACCCCATGTACTCTGCGTTGATACCACTGCTTGGCCATTAGGCCTGTAAACAATACGTAACTTG
 ...
 ```
 
-# 2. Deduplication and polishing
+## 4. Deduplication and polishing
 
+As single-cell data often contains multiple reads for each unique barcode and UMI combination, we need to deduplicate reads to a single barcode/UMI combination. This is typically achieved after alingment and during quantification (ie. only counting a barcode and UMI combination once). However, **nailpolish** allows this deduplication to be performed earlier, and uses the duplicate reads to generate conconsensus sequence - hence improving the read accuracy whilst also deduplicating.
+
+Nailpolish works in two steps. First the fastq file is indexed.
+```bash
+nailpolish index scmixology2_250k.demultiplexed.fastq
+```
+At this point you can use the output to examine the duplication rate within the data. 
+```
+nailpolish summary scmixology2_250k.demultiplexed.fastq
+```
+
+Loading scmixology2_250k.demultiplexed.summary.html in a browser shows that the duplicate rate is low. That's because this tutorial uses a small subset the data, but a range of 5-40% would be typical for long-read single-cell data.
+[image]
+
+Now we can perform the concensus calling:
+```bash
+nailpolish consensus scmixology2_250k.demultiplexed.fastq > scmixology2_250k.demultiplexed.deduplicated.fastq
+```
+The resulting data will be a mixture of original (singlet) and consensus (duplicated) reads, which each have a unique barcode and UMI. The barcode and UMI are encoded in the read ID which will be transfers into the mapped bam files by minimap2.
+```
+
+
+```
+
+## 5. Read Mapping
+
+
+## 6. Transcript Quantification
+
+## 7. Count analysis
+
+At this point your count matrix can be analysed is whatever way makes the most sense for you and your experiment. Here we show a simple example using R and seurat to generate a UMAP of the cells. 
 
 
 
