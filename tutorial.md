@@ -185,15 +185,28 @@ Now we can perform the concensus calling:
 nailpolish consensus scmixology2_250k.demultiplexed.fastq > scmixology2_250k.demultiplexed.deduplicated.fastq
 ```
 The resulting data will be a mixture of original (singlet) and consensus (duplicated) reads, which each have a unique barcode and UMI. The barcode and UMI are encoded in the read ID which will be transfers into the mapped bam files by minimap2.
-```
-
-
-```
 
 ## 5. Read Mapping
 
+We are now ready to align the reads. As we'll be using oarfish for quantification, mapping is done again the reference transcriptome. I this instance gencode (downloaded in step 0).
+```bash
+minimap2 -x map-ont -y gencode.v48.transcripts.fa scmixology2_250k.demultiplexed.deduplicated.fastq > scmixology2_250k.demultiplexed.deduplicated.sam
+```
+The "-y" flag here is important as it tell minimap2 to add the barcode and UMI tags into the bam (these will be used by oarfish):
+```bash
+head scmixology2_250k.demultiplexed.deduplicated.sam
+processed_0_1	1256	221	484	-	ENST00000206423.8|ENSG00000091986.16|OTTHUMG00000159265.4|OTTHUMT00000354219.2|CCDC80-201|CCDC80|12301|protein_coding|	12301	4687	4953	64	266	4	tp:A:P	cm:i:6	s1:i:63	s2:i:55	dv:f:0.1056	rl:i:109	MI:Z:GCCCGAACAATACCCA_GCATAAATTGTA	nI:i:0	CB:Z:GCCCGAACAATACCCA	UB:Z:GCATAAATTGTA	nT:Z:simplex
+processed_0_1	1256	221	530	+	ENST00000357401.3|ENSG00000197934.9|OTTHUMG00000078661.2|OTTHUMT00000171614.1|CYYR1-AS1-201|CYYR1-AS1|3412|lncRNA|	3412	1765	2077	56	313	0	tp:A:S	cm:i:4	s1:i:55	dv:f:0.1394	rl:i:109	MI:Z:GCCCGAACAATACCCA_GCATAAATTGTA	nI:i:0CB:Z:GCCCGAACAATACCCA	UB:Z:GCATAAATTGTA	nT:Z:simplex
+processed_0_1	1256	144	484	+	ENST00000651069.1|ENSG00000180769.10|OTTHUMG00000141281.8|OTTHUMT00000502559.2|WDFY3-AS2-206|WDFY3-AS2|2179|lncRNA|	2179	1403	1748	51	346	0	tp:A:S	cm:i:5	s1:i:49	dv:f:0.1280	rl:i:109	MI:Z:GCCCGAACAATACCCA_GCATAAATTGTA	nI:i:0CB:Z:GCCCGAACAATACCCA	UB:Z:GCATAAATTGTA	nT:Z:simplex
+```
+
+Before proceeding we also need to sort the
+
+
 
 ## 6. Transcript Quantification
+
+Next we quantify the read 
 
 ## 7. Count analysis
 
