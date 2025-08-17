@@ -37,7 +37,7 @@ jobs:
     name: build-macos
     runs-on: macos-15
     env:
-      CXX: g++-14
+      CXX: g++
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
