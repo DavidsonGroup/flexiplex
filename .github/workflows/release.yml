@@ -42,10 +42,12 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          path: flexiplex
 
       - name: Get short SHA
         id: vars
-        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+        run: echo "sha_short=$(cd flexiplex && git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
       - name: Download Linux artifacts
         uses: actions/download-artifact@v4
@@ -62,18 +64,18 @@ jobs:
       - name: Extract and organize binaries
         run: |
           # Create bin directory
-          mkdir -p ./bin
+          mkdir -p ./flexiplex/bin
           
           # Extract Linux binary
           cd ./linux-build
           tar -xf result.tar
-          mv flexiplex ../bin/flexiplex-linux
+          mv flexiplex ../flexiplex/bin/flexiplex-linux
           cd ..
           
           # Extract macOS binary
           cd ./macos-build
           tar -xf result.tar
-          mv flexiplex ../bin/flexiplex-macos
+          mv flexiplex ../flexiplex/bin/flexiplex-macos
           cd ..
           
           # Clean up temporary directories
@@ -82,10 +84,10 @@ jobs:
       - name: Create release archive
         run: |
           # Create the archive with source code and binaries
-          tar -czf "../flexiplex-bundled.tar.gz" \
+          tar -czf "./flexiplex-bundled.tar.gz" \
             --exclude='.git' \
             --exclude='.github' \
-            .
+            flexiplex
 
       - name: Upload to Release
         uses: actions/upload-release-asset@v1
@@ -93,6 +95,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.metadata.outputs.upload_url }}
-          asset_path: ../flexiplex-bundled.tar.gz
+          asset_path: ./flexiplex-bundled.tar.gz
           asset_name: flexiplex-${{ steps.metadata.outputs.version }}.tar.gz
           asset_content_type: application/gzip
