@@ -38,6 +38,7 @@ jobs:
     runs-on: macos-15
     env:
       CXX: g++
+      CFLAGS: "-Wl,-rpath,/opt/homebrew/opt/gcc/lib/gcc/current"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
