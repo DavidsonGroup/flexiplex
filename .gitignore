@@ -6,3 +6,7 @@ __pycache__/
 flexiplex
 compile_commands.json
 .cache/clangd/index
+
+**/.DS_Store
+flexiplex.dSYM/
+debug/
