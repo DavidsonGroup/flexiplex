@@ -37,9 +37,12 @@ jobs:
     name: build-macos
     runs-on: macos-15
     env:
-      CXX: g++-14
+      CXX: /opt/homebrew/bin/g++
       DYLD_LIBRARY_PATH: /opt/homebrew/opt/gcc/lib/gcc/current
     steps:
+      - name: Link g++ -> g++-14
+        run: ln -sf /opt/homebrew/bin/g++-14 /opt/homebrew/bin/g++
+
       - name: Checkout code
         uses: actions/checkout@v4
 
