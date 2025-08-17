@@ -38,7 +38,7 @@ jobs:
     runs-on: macos-15
     env:
       CXX: g++-14
-      CFLAGS: "-Wl,-rpath,/opt/homebrew/opt/gcc/lib/gcc/current"
+      CFLAGS: "-Wl,-rpath,/opt/homebrew/opt/gcc/lib/gcc/current -Wl,-install_name,/opt/homebrew/opt/gcc/lib/gcc/current/libstdc++.6.dylib \"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
