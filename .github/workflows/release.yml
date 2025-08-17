@@ -80,10 +80,9 @@ jobs:
       - name: Create release archive
         run: |
           # Create the archive with source code and binaries
-          tar -czf "flexiplex-bundled.tar.gz" \
+          tar -czf "../flexiplex-bundled.tar.gz" \
             --exclude='.git' \
             --exclude='.github' \
-            --exclude='flexiplex-bundled.tar.gz' \
             .
 
       - name: Upload to Release
@@ -92,6 +91,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.metadata.outputs.upload_url }}
-          asset_path: ./flexiplex-bundled.tar.gz
+          asset_path: ../flexiplex-bundled.tar.gz
           asset_name: flexiplex-${{ steps.metadata.outputs.version }}.tar.gz
           asset_content_type: application/gzip
