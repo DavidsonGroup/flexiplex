@@ -14,7 +14,7 @@ jobs:
           args: make
 
       - name: Add execute permission
-        run: chmod +x ./flexiplex
+        run: sudo chown runner:runner ./flexiplex && chmod +x ./flexiplex
 
       - name: Run tests
         run: make test
