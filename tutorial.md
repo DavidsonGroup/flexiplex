@@ -178,7 +178,7 @@ nailpolish summary scmixology2_250k.demultiplexed.fastq
 ```
 
 Loading scmixology2_250k.demultiplexed.summary.html in a browser shows that the duplicate rate is low. That's because this tutorial uses a small subset the data, but a range of 5-40% would be typical for long-read single-cell data.
-[image]
+![Duplicate statistics from Nailpolish](/flexiplex/docs/assets/tutorial.nailplish.png)
 
 Now we can perform the concensus calling:
 ```bash
