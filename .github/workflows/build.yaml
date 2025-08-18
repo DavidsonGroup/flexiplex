@@ -1,22 +1,46 @@
-on: [push]
+on: 
+  push:
+  workflow_call:
 
 jobs:
-  build:
-    name: build (${{ matrix.os }})
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            label: centos-7
-          - os: macos-14
-            label: macos-arm64
-          - os: macos-latest
-            label: macos-x64
+  build-linux:
+    name: build-linux
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build
+        uses: docker://ghcr.io/olliecheng/images:cross-x86-centos
+        with:
+          args: make
+
+      - name: Add execute permission
+        run: sudo chown runner:runner ./flexiplex && chmod +x ./flexiplex
+
+      - name: Run tests
+        run: make test
+
+      - name: Tar files
+        run: tar -cvf ./result.tar ./flexiplex
+
+      - name: Get short SHA
+        id: vars
+        run: git config --global --add safe.directory '*' && echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Save artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ steps.vars.outputs.sha_short }}-centos-7
+          path: ./result.tar
+          retention-days: 90
+
+  build-macos:
+    name: build-macos
+    runs-on: macos-15
     env:
-      ACTIONS_RUNNER_FORCE_ACTIONS_NODE_VERSION: node16
-      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
-    runs-on: ${{ matrix.os }}
-    container: ${{ matrix.container }}
+      CXX: g++-14
+      CFLAGS: -static-libgcc -static-libstdc++
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -40,6 +64,6 @@ jobs:
       - name: Save artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: build-${{ steps.vars.outputs.sha_short }}-${{ matrix.label }}
+          name: build-${{ steps.vars.outputs.sha_short }}-macos
           path: ./result.tar
           retention-days: 90
