@@ -178,7 +178,7 @@ nailpolish summary scmixology2_250k.demultiplexed.fastq
 ```
 
 Loading scmixology2_250k.demultiplexed.summary.html in a browser shows that the duplicate rate is low. That's because this tutorial uses a small subset the data, but a range of 5-40% would be typical for long-read single-cell data.
-![Duplicate statistics from Nailpolish](/flexiplex/docs/assets/tutorial.nailplish.png)
+![Duplicate statistics from Nailpolish](/flexiplex/docs/assets/tutorial.nailpolish.png)
 
 Now we can perform the concensus calling:
 ```bash
@@ -190,23 +190,28 @@ The resulting data will be a mixture of original (singlet) and consensus (duplic
 
 We are now ready to align the reads. As we'll be using oarfish for quantification, mapping is done again the reference transcriptome. I this instance gencode (downloaded in step 0).
 ```bash
-minimap2 -x map-ont -y gencode.v48.transcripts.fa scmixology2_250k.demultiplexed.deduplicated.fastq > scmixology2_250k.demultiplexed.deduplicated.sam
+minimap2 --rev-only -y -ax map-ont gencode.v48.transcripts.fa scmixology2_250k.demultiplexed.deduplicated.fastq | samtools view -b | samtools sort -t CB -o scmixology2_250k.demultiplexed.deduplicated.bam
 ```
+The "--rev-only" flag tells minimap2 to only map to the reverse strand. We do this because after demultiplexing, the reads are orienteded in the anti-sense (not this might be different for protocols other than 10x 3'). Some chimeric reads will be present even after the demultiplexing and chopping, and this reduces their impact.
+
 The "-y" flag here is important as it tell minimap2 to add the barcode and UMI tags into the bam (these will be used by oarfish):
 ```bash
-head scmixology2_250k.demultiplexed.deduplicated.sam
-processed_0_1	1256	221	484	-	ENST00000206423.8|ENSG00000091986.16|OTTHUMG00000159265.4|OTTHUMT00000354219.2|CCDC80-201|CCDC80|12301|protein_coding|	12301	4687	4953	64	266	4	tp:A:P	cm:i:6	s1:i:63	s2:i:55	dv:f:0.1056	rl:i:109	MI:Z:GCCCGAACAATACCCA_GCATAAATTGTA	nI:i:0	CB:Z:GCCCGAACAATACCCA	UB:Z:GCATAAATTGTA	nT:Z:simplex
-processed_0_1	1256	221	530	+	ENST00000357401.3|ENSG00000197934.9|OTTHUMG00000078661.2|OTTHUMT00000171614.1|CYYR1-AS1-201|CYYR1-AS1|3412|lncRNA|	3412	1765	2077	56	313	0	tp:A:S	cm:i:4	s1:i:55	dv:f:0.1394	rl:i:109	MI:Z:GCCCGAACAATACCCA_GCATAAATTGTA	nI:i:0CB:Z:GCCCGAACAATACCCA	UB:Z:GCATAAATTGTA	nT:Z:simplex
-processed_0_1	1256	144	484	+	ENST00000651069.1|ENSG00000180769.10|OTTHUMG00000141281.8|OTTHUMT00000502559.2|WDFY3-AS2-206|WDFY3-AS2|2179|lncRNA|	2179	1403	1748	51	346	0	tp:A:S	cm:i:5	s1:i:49	dv:f:0.1280	rl:i:109	MI:Z:GCCCGAACAATACCCA_GCATAAATTGTA	nI:i:0CB:Z:GCCCGAACAATACCCA	UB:Z:GCATAAATTGTA	nT:Z:simplex
+samtool view scmixology2_250k.demultiplexed.deduplicated.bam | head -n2
+processed_16225_1	272	ENST00000457540.1|ENSG00000225630.1|OTTHUMG00000002336.1|OTTHUMT00000006718.1|MTND2P28-201|MTND2P28|1044|unprocessed_pseudogene|	1	0	1607S6M1D102M3D23M2D34M1D107M1D58M1I26M1D11M1D16M3D46M1I2M1I73M2D7M1I8M1D49M1I6M1D139M1D8M1I13M3D140M1D19M3D49M1I69M15S	*	0	0*	*	NM:i:56	ms:i:1735	AS:i:1726	nn:i:0	tp:A:S	cm:i:99	s1:i:682	de:f:0.0445	rl:i:230	MI:Z:AAAGAACAGCGATCGA_CCCGATTTGCGT	nI:i:16225	CB:Z:AAAGAACAGCGATCGA	UB:Z:CCCGATTTGCGT	nT:Z:simplex
+processed_174462_1	272	ENST00000414273.1|ENSG00000237973.1|OTTHUMG00000002333.2|OTTHUMT00000006715.2|MTCO1P12-201|MTCO1P12|1543|unprocessed_pseudogene|	1082	0	1069S19M1I30M1I57M1I5M1D38M1I50M3I150M2D110M67S	*	0	0	*	*	NM:i:20	ms:i:813	AS:i:810	nn:i:0	tp:A:S	cm:i:52	s1:i:360	de:f:0.0365	rl:i:30	MI:Z:AAAGAACAGCGATCGA_TACCCTGAGTGT	nI:i:174462	CB:Z:AAAGAACAGCGATCGA	UB:Z:TACCCTGAGTGT	nT:Z:simplex
 ```
-
-Before proceeding we also need to sort the
-
-
+samtools view -b converts the output from minimap2 to bam format, and samtools sort -t CB, sorts the reads by cell barcode which is required by oarfish
 
 ## 6. Transcript Quantification
 
-Next we quantify the read 
+Next we quantify the read using oarfish. 
+
+oarfish --alignments scmixology2_250k.demultiplexed.deduplicated.bam --single-cell --filter-group no-filters --model-coverage -o scmixology2_250k
+
+This generated the following three files which are needed for count data analysis:
+scmixology2_250k.barcodes.txt
+scmixology2_250k.count.mtx
+scmixology2_250k.features.txt
 
 ## 7. Count analysis
 
