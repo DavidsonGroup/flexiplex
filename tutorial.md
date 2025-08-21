@@ -215,9 +215,10 @@ scmixology2_250k.features.txt
 
 ## 7. Count analysis
 
-At this point your count matrix can be analysed is whatever way makes the most sense for you and your experiment. Here we show a simple example using R and seurat to generate a UMAP of the cells. 
+At this point your count matrix can be analysed is whatever way makes the most sense for your experiment. Here we show a simple example using R and seurat to generate a UMAP of the cells. This part of the tutorial is designed to be short, but for a real dataset there are several more QC and data exploration steps we would encourage you to perform. There are many excellent guides for single-cell analysis such as these: [Seurat](https://satijalab.org/seurat/articles/get_started_v5_new) or [This excellent introduction to single-cell analysis](https://www.singlecellcourse.org/introduction-to-single-cell-rna-seq.html)
 
-Within **R**, input the following code:
+The following will be done within **R**, so it's assumed you already have that installed on your system.
+First we will load in the oarfish count matrix and create a seurat object from it:
 ```R
 library(Matrix)
 library(Seurat)
@@ -229,8 +230,28 @@ barcodes <- readLines(paste0(stem, ".barcodes.txt"))
 
 rownames(counts) <- features[[1]]
 colnames(counts) <- barcodes
-
 seu <- CreateSeuratObject(counts = counts)
+```
+
+Now we need to check the data quality. Specifically, checking if there are 'poor' quality cells that need to be filtered out. These tend to be dead/dying cells or empty drops. Most of these will have been removed already during our flexiplex-filter step above, but some may remain:
+
+```R
+seu[["percent.mt"]] <- PercentageFeatureSet(seu, pattern = "-MT-")
+FeatureScatter(seu, feature1 = "nCount_RNA", feature2 = "percent.mt") | 
+FeatureScatter(seu, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+```
+
+![QC](/flexiplex/docs/assets/tutorial.qc.png)
+
+This step calculated the fraction of UMIs coming from mitodondrial genes - which tend to be higher for poor quality cells. As you will see here there is a sprinkling of cells above 4% that look suspcious. The % you filter on will need to be adjusted for each dataset, and may be higher than this (e.g. 10-20% is still typical). We can also check the number of features (transcripts) with one or more UMI count and the number of total UMI counts, per cells. Again we see a group with low features and counts. We will also filter these out:
+
+```R
+seu <- subset(seu, subset = nFeature_RNA > 250 & percent.mt < 4)
+```
+
+We are now ready to look at the cell clustering. If all has gone well, we would expect 5 distinct groups - corresponding tot he 5 different celllines.
+
+```
 seu <- NormalizeData(seu)
 seu <- FindVariableFeatures(seu, nfeatures = 500)
 seu <- ScaleData(seu)
@@ -244,7 +265,12 @@ seu <- RunUMAP(seu, dims = 1:10)
 DimPlot(seu, reduction = "umap", label = TRUE)
 ```
 
-You should get the following UMAP plot showing 5 clusters (one per cells line):
+Ae we hoped we get a UMAP showing 5 very well defined clusters of cells:
+
+![UMAP](/flexiplex/docs/assets/tutorial.umap.png)
+
+
+
 
 
 
