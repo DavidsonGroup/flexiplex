@@ -217,5 +217,34 @@ scmixology2_250k.features.txt
 
 At this point your count matrix can be analysed is whatever way makes the most sense for you and your experiment. Here we show a simple example using R and seurat to generate a UMAP of the cells. 
 
+Within **R**, input the following code:
+```R
+library(Matrix)
+library(Seurat)
+
+stem <- "scmixology2_250k"  # change if you used a different -o prefix
+counts <- t(Matrix::readMM(paste0(stem, ".count.mtx")))
+features <- read.delim(paste0(stem, ".features.txt"), header = FALSE, stringsAsFactors = FALSE)
+barcodes <- readLines(paste0(stem, ".barcodes.txt"))
+
+rownames(counts) <- features[[1]]
+colnames(counts) <- barcodes
+
+seu <- CreateSeuratObject(counts = counts)
+seu <- NormalizeData(seu)
+seu <- FindVariableFeatures(seu, nfeatures = 500)
+seu <- ScaleData(seu)
+seu <- RunPCA(seu, npcs = 10)
+
+seu <- FindNeighbors(seu, dims = 1:10)
+seu <- FindClusters(seu, resolution = 0.6, random.seed = 2022)
+
+seu <- RunUMAP(seu, dims = 1:10)
+
+DimPlot(seu, reduction = "umap", label = TRUE)
+```
+
+You should get the following UMAP plot showing 5 clusters (one per cells line):
+
 
 
