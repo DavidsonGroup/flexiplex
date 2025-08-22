@@ -16,7 +16,7 @@ This tutorial shows a simple workflow for pre-processing long-read single-cell R
 6. Quantification with **oarfish** (single-cell mode) to get a count matrix  
 7. Loading counts in **R/Seurat** and plotting a UMAP
 
-A basic understanding of RNA sequencing data analysis is assumed. Prior experience with single-cell data will be helpful, as concepts such as UMIs and empty drops will not be discussed here. The pipeline presented here is not an endorsment or recommendation for the best combination of approachs, as there are many option for different tools at each step. These tools were primarily choosen for their usability (particularly for beginners). Questions and feedback (positive or negative) is very welcome on the tutorial and should be posted on out [issue page](https://github.com/DavidsonGroup/flexiplex/issues), or my emailing the authors of flexiplex.
+A basic understanding of RNA sequencing data analysis is assumed. Prior experience with single-cell data will be helpful, as discussion of concepts such as UMIs, knee plots and empty drops will not be discussed here. The pipeline presented here is not an endorsment or recommendation for the best combination of software, as there are many option of tools at each step. These tools were primarily choosen for their usability (particularly for beginners). Questions and feedback (positive or negative) is very welcome on the tutorial and should be posted on our [issuse page](https://github.com/DavidsonGroup/flexiplex/issues), or by emailing the authors of flexiplex.
 
 ---
 
@@ -43,7 +43,7 @@ gunzip gencode.v48.transcripts.fa.gz
 
 
 ## 1. Barcode discovery
-To begin the data analysis, we will first need to find out which single-cell barcodes are present in the dataset. This can be done by running **flexiplex** in discovery mode (with the barcode list paramter, -k, missing):
+To begin the data analysis, we will first need to find out which single-cell barcodes are present in the dataset. This can be done by running **flexiplex** in discovery mode (with the barcode list parameter, -k, missing):
 
 ```bash
 gunzip -c scmixology2_250k.fastq.gz | flexiplex -d 10x3v3 -f 0 > 1_flexiplex.out
@@ -78,7 +78,7 @@ Number of reads where a barcode was found: 112261
 Number of reads where more than one barcode was found: 1422
 All done!
 ```
-You'll see that the number of reads where a barcode was found is less than half, but this is okay because we have selected just the best quality read (-f 0 means no sequencing errors in the flank around the barcode). You'll also see that there are some reads were mutlipled barcodes are found, so called chimeric reads. Flexiplex will chop these reads to make two (or more), when it's running in demultiplexing mode later. We typically find 2-15% of reads being chimeric in this type of data. If you see a much larger fraction in your own dataset (>20%) you may have a data quality issues that need to be addressed.
+You'll see that the number of reads where a barcode was found is less than half, but this is okay because we have intentionally selected just the best quality read (-f 0 means no sequencing errors in the flank around the barcode). You'll also see that there are some reads were multiple barcodes are found, so called chimeric reads. Flexiplex will chop these reads to make two (or more), when it's running in demultiplexing mode later. We typically find 2-15% of reads being chimeric in this type of data. If you see a much larger fraction in your own dataset (>20%) you may have a data quality issues that needs addressing.
 
 The key output from this step is a file called "flexiplex_barcodes_counts.txt" which lists the number of reads for each barcode, and will be used for generating a knee plot in the next step.
 ```
@@ -97,7 +97,7 @@ ATGCCTCGTCAAGCCC	867
 
 ## 2. Barcode filtering
 
-Now, we are ready to refine the barcode list to a short-list of high quality barcodes. **flexiplex-filter** is a python script packaged with flexiplex that will automatically identify the inflection point of the barcode knee plot, and (optionally) remove barcodes not seen in known list - such as the inclusion lists provided by Cell Ranger. Check the flexiplex documentaion carefully to make sure you've correctly installed it, as it requires an extra step beyond the installation of **flexiplex**.
+Now, we are ready to refine the barcode list to a short-list of high quality barcodes. **flexiplex-filter** is a python script packaged with flexiplex that will automatically identify the inflection point of the barcode knee plot, and (optionally) remove barcodes not seen in a known list - such as the inclusion list provided by Cell Ranger. Check the flexiplex documentaion carefully to make sure you've correctly installed **flexiplex-filter**, as it requires an extra step beyond the installation of **flexiplex**.
 
 To run:
 ```bash
@@ -115,11 +115,11 @@ flexiplex-filter -g flexiplex_barcodes_counts.txt
 In this case, is appears to have choosen well.
 ![flexiplex-filter graph](/flexiplex/docs/assets/tutorial.flexiplex-filter.png)
 
-In our example, flexiplex-filter picked the 180 most frequent barcodes, which is close to the number of cells known in this dataset. The process above will also work for samples with many more cells, and has been tested on datasets with tens of thousands of cells.
+In our example, flexiplex-filter picked the 180 most frequent barcodes, which is close to the number of cells expected in this dataset. The process above will also work for samples with many more cells, and has been tested on datasets with tens of thousands of cells.
 
 ## 3. Barcode demultiplexing
 
-Now we have a short-list of barcodes. We will run flexiplex a second time to actually assign each read to one of these barcodes, trim of the 10x primer/adapter sequence, and chop any chimeric reads:
+Now we have a short-list of barcodes. We will run **flexiplex** a second time to actually assign each read to one of these barcodes, trim off the 10x primer/adapter sequence, and chop any chimeric reads:
 ```bash
 gunzip -c scmixology2_250k.fastq.gz | flexiplex -d 10x3v3 -k flexiplex_barcodes_final.txt > scmixology2_250k.demultiplexed.fastq
 ```
@@ -156,12 +156,13 @@ Number of reads where a barcode was found: 213458
 Number of reads where more than one barcode was found: 5923
 All done!
 ```
-And you see that we are able to find barcodes in 84% if reads. The read ID now contains the barcode (CB) and UMI (UB) information needed for downstream analysis:
+And you see that we are able to find barcodes in 85% of reads, with a 2.7% chimeric rate - both of these metrics are great. The read ID now contains the barcode (CB) and UMI (UB) information needed for downstream analysis:
 
 ```bash
 head -n2 scmixology2_250k.demultiplexed.fastq
-```bash
 ```
+
+```bash
 @GCCCGAACAATACCCA_GCATAAATTGTA#82f7a317-c081-4d86-bbb3-60926dce0db9_+1of1	CB:Z:GCCCGAACAATACCCA	UB:Z:GCATAAATTGTA
 TTTTTTTTTTTTTTGTATTTTTAGTAGAGACGGGGTTTCACCATATTGGCCAGGCTGGTCTCGAACTCCTGACCTCATCATCCACCTGCCTTAGCCTCCCAAAATGCTGGGATTACAGGCATGAGCCACCGCACCCGGCCAGGAATTGCTTCTTATGGATGAACAAAGAAAATAGTTTCCTGAGATGGTATCTACTCTGTGAAGATGCACAACATTGTTGAAATGACAACAAAGGATCTGAATATTACATAAACTTGTTGATAAAAACAGTGGCAGGGTTTGAGATCATTGATTCAGTTTTGAAAGAAGTTCTACTGTGGGTAAAAATGCCATCAAACAGCATCACATGCTGCAGAGAAATCTTTCATGAAAGGAAGAATCAATCGATATGTATCCTCCATTTTGTCTTATTTTAAAAATTTGCCACAGCCACTCCAACCTTCAGTAACTACTACCTTGATCTGTCAGCAGCCATCAACATCAAGGCAACAGACCCTCCCACCAGCAAAAAAATTACAACTTGCTGAAGGCTCAGATGATCATTACCATTTTTTAACAATATTTTAAGATAGGTGTGTACATTGTTTTTAGACATAATCTATTGCATACTTAATAGACTTCTACAGTAATAGTGCAAAACATAACCTTTATGTACACTAGGGAACCAAAAATTTACACGTGACTCCTTTTATTTTGATGGTCTGGAACTGAGTCCACAGTATCTCCAAGGTATGCCTATATTGACTGATGAATAAACAAAATGTGGTATAGCCATACAATGGAATATTGTTCAGTCACAAAAAGAATAACATTCTGATACATGCTACAACATAGATGAACCTTGAAAATATTATGCTAAGTGAAAGAAGTCAGACACAAAAGACAAGTATTATATGATTCCATTTATATAAAATGTCCAGGATAGTCAAATCAACGAGAGACCAAAAAGTAGATTAATGGTTGACAGAGGCTGAAGGTAGGGAGGAAATGGGGAGTGACTTTAATGGGTACAGGGTTTTAGATAAAAGAAAATGTTCTGGAATTAGTGGTGATGCACAACCTTGTACAACCTTTTTGCAATATAGTGCAATAAGACAATATTGTACAATCTTGTTTATATACTAAAGCCATTAAATTACACACTTTAAAGGGTGCATTTTATGACATGGGAAGTGTACATTAAAAATAAATAACCCCATGTACTCTGCGTTGATACCACTGCTTGGCCATTAGGCCTGTAAACAATACGTAACTTG
 ```
@@ -174,27 +175,31 @@ Nailpolish works in two steps. First the fastq file is indexed.
 ```bash
 nailpolish index scmixology2_250k.demultiplexed.fastq
 ```
+
 At this point you can use the output to examine the duplication rate within the data. 
 ```
 nailpolish summary scmixology2_250k.demultiplexed.fastq
 ```
 
-Loading scmixology2_250k.demultiplexed.summary.html in a browser shows that the duplicate rate is low (around 2%). That's because this tutorial uses a small subset the data, but a range of 5-40% would be typical for long-read single-cell data.
+Loading scmixology2_250k.demultiplexed.summary.html in a browser shows that the duplicate rate is low (around 2%). That's because this tutorial uses a small subset the data, but a range of 5-40% would be typical for long-read single-cell data, and depends on saturation levels.
+
 ![Duplicate statistics from Nailpolish](/flexiplex/docs/assets/tutorial.nailpolish.png)
 
 Now we can perform the concensus calling:
 ```bash
 nailpolish consensus scmixology2_250k.demultiplexed.fastq > scmixology2_250k.demultiplexed.deduplicated.fastq
 ```
-The resulting data will be a mixture of original (singlet) and consensus (duplicated) reads, which each have a unique barcode and UMI. The barcode and UMI are encoded in the read ID which will be transfers into the mapped bam files by minimap2.
+The resulting data will be a mixture of original (singlet) and consensus (duplicated) reads, which each have a unique barcode and UMI. The barcode and UMI are encoded in the CB and UB tags in the read ID line, as before.
 
 ## 5. Read Mapping
 
-We are now ready to align the reads. As we'll be using oarfish for quantification, mapping is done against the reference transcriptome. In this instance gencode (downloaded in step 0).
+We are now ready to align the reads. As we'll be using ***oarfish** for quantification, mapping is done against the reference transcriptome. In this instance gencode (downloaded in step 0).
 ```bash
-minimap2 --rev-only -y -ax map-ont gencode.v48.transcripts.fa scmixology2_250k.demultiplexed.deduplicated.fastq |\
+minimap2 --rev-only -y -ax map-ont gencode.v48.transcripts.fa \
+      scmixology2_250k.demultiplexed.deduplicated.fastq |\
       samtools view -b |\
-      samtools sort -t CB -o scmixology2_250k.demultiplexed.deduplicated.bam
+      samtools sort -t CB \
+      -o scmixology2_250k.demultiplexed.deduplicated.bam
 ```
 The "--rev-only" flag tells minimap2 to only map to the reverse strand. We do this because after demultiplexing, the reads are orienteded in the anti-sense direction (note this might be different for protocols other than 10x 3'). Some chimeric reads will be present even after the demultiplexing and chopping, and this reduces their impact.
 
@@ -218,7 +223,7 @@ oarfish --alignments scmixology2_250k.demultiplexed.deduplicated.bam \
         -o scmixology2_250k
 ```
 
-This generated the following three files which are needed for count data analysis:
+This generates the following three files which are needed for count data analysis:
 ```
 scmixology2_250k.barcodes.txt
 scmixology2_250k.count.mtx
@@ -230,7 +235,7 @@ scmixology2_250k.features.txt
 At this point your count matrix can be analysed is whatever way makes the most sense for your experiment. Here we show a simple example using R and seurat to generate a UMAP of the cells. This part of the tutorial is designed to be short, but for a real dataset there are several more QC and data exploration steps we would encourage you to perform. There are many excellent guides for single-cell analysis such as these: [Seurat](https://satijalab.org/seurat/articles/get_started_v5_new) or [introduction to single-cell analysis](https://www.singlecellcourse.org/introduction-to-single-cell-rna-seq.html)
 
 The following will be done within **R**, so it's assumed you already have that installed on your system.
-First we will load in the oarfish count matrix and create a seurat object from it:
+First we will load in the oarfish transcript count matrix and create a seurat object from it:
 ```R
 library(Matrix)
 library(Seurat)
@@ -255,7 +260,7 @@ FeatureScatter(seu, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
 
 ![QC](/flexiplex/docs/assets/tutorial.qc.png)
 
-This step calculated the fraction of UMIs coming from mitodondrial genes - which tend to be higher for poor quality cells. As you will see here there is a sprinkling of cells above 4% with low count, that may be bad quality. The % you filter on will need to be adjusted for each dataset, and may be higher than this (e.g. 10-20% is still typical). We can also check the number of features (transcripts) with one or more UMI count and the number of total UMI counts, per cells. Again we see a group with low features and counts. 
+This step calculates the fraction of UMIs coming from mitodondrial genes - which tend to be higher for poor quality cells. As you will see here there is a sprinkling of cells above 4% with low count, that may be bad quality. The % you filter on will need to be adjusted for each dataset, and may be higher than this (e.g. 10-20% is still typical). We can also check the number of features (transcripts) with one or more UMI count and the number of total UMI counts, per cells. Again we see a group with low features and counts. 
 
 We will filter these out:
 
