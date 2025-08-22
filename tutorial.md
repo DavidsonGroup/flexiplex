@@ -28,9 +28,8 @@ This tutorial assumes that you have already installed the required software:
  * [**R** and **seurat**](https://satijalab.org/seurat/articles/install_v5.html)
 
 You will also need to download the demo dataset:
-```bash
-wget .....scmixology2_250k.fastq.gz
-```
+[scmixology2_250k.fastq.gz](https://figshare.com/ndownloader/files/57350216)
+
 This file is a subset for the scMixology replicate 2 data generated and published by Tan et al., Genome Biology, 2021 and rebased called by You et al., Genome Biology, 2023. It contains sequencing single cell data from a mixture of five
 lung cancer celllines (HCC827, H1975, H838, A549 and H2228) sequenced using 10x 3' version 3 and Oxford Nanopore Technologies. We have subset down to just 250 thousand reads from the 250 most variable genes, to make the tutorial run in a reasonable time.
 
