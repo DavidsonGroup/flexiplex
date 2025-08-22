@@ -223,7 +223,7 @@ First we will load in the oarfish count matrix and create a seurat object from i
 library(Matrix)
 library(Seurat)
 
-stem <- "scmixology2_250k"  # change if you used a different -o prefix
+stem <- "scmixology2_250k"
 counts <- t(Matrix::readMM(paste0(stem, ".count.mtx")))
 features <- read.delim(paste0(stem, ".features.txt"), header = FALSE, stringsAsFactors = FALSE)
 barcodes <- readLines(paste0(stem, ".barcodes.txt"))
