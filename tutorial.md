@@ -97,7 +97,7 @@ ATGCCTCGTCAAGCCC	867
 
 ## 2. Barcode filtering
 
-Now, we are ready to refine the barcode list to a short-list of high quality barcodes. **flexiplex-filter** is a Python script packaged with **flexiplex** that will automatically identify the inflection point of the barcode knee plot, and (optionally) remove barcodes not seen in a known list - such as the inclusion list provided by Cell Ranger. Check the **flexiplex** documentation carefully to make sure you've correctly installed **flexiplex-filter**, as it requires an extra step beyond the installation of **flexiplex**.
+Now, we are ready to refine the barcode list to a short list of high-quality barcodes. This is commonly done using a 'knee plot'. A knee plot visualises the counts (reads or UMIs) per barcode by plotting the number of counts (y-axis) against barcode rank, after ranking on the number of counts (x-axis). For good-quality data, we tend to see a sudden drop in this distribution, giving the shape of a knee. Barcodes below the inflection point tend to have much lower counts and correspond to dead or dying cells, empty drops, or false barcodes, and should be removed. **flexiplex-filter** is a Python script packaged with **flexiplex** that will automatically identify the inflection point of the knee plot, reporting only the barcodes ranked above it, and (optionally) removing barcodes not present in a known list—such as the inclusion list provided by Cell Ranger. Check the **flexiplex** documentation carefully to make sure you have correctly installed **flexiplex-filter**, as it requires an extra step beyond the installation of **flexiplex**.
 
 To run:
 ```bash
