@@ -29,8 +29,10 @@ Before beginning, the following packages must be installed or already available 
  * [**oarfish**](https://github.com/COMBINE-lab/oarfish)
  * [**R** and **seurat**](https://satijalab.org/seurat/articles/install_v5.html)
 
-You will also need to download the demo dataset:
-[scmixology2_250k.fastq.gz](https://figshare.com/ndownloader/files/57350216)
+You will also need to download the demo dataset, [scmixology2_250k.fastq.gz](https://figshare.com/ndownloader/files/57350216)
+```
+wget --content-disposition https://ndownloader.figshare.com/files/57350216
+```
 
 This file is a subset of the scMixology replicate 2 data generated and published by Tan et al., Genome Biology, 2021 and rebase called by You et al., Genome Biology, 2023. It contains single cell sequencing data from a mixture of five
 lung cancer cell-lines (HCC827, H1975, H838, A549 and H2228) generated using 10x 3' version 3 and Oxford Nanopore Technologies. We have subset down to just 250 thousand reads from the 250 most variable genes, to make the tutorial run in a reasonable time frame.
