@@ -103,7 +103,7 @@ To see usage information, run
 # Usage
 
 ```
-FLEXIPLEX 1.01
+FLEXIPLEX 1.02.5
 usage: flexiplex [options] [reads_input]
 
   reads_input: a .fastq or .fasta file. Will read from stdin if empty.
@@ -117,10 +117,15 @@ usage: flexiplex [options] [reads_input]
                      including flanking sequenence and split read if multiple
                      barcodes found (default: true).
      -s true/false   Sort reads into separate files by barcode (default: false)
-     -n prefix   Prefix for output filenames.
-     -e N   Maximum edit distance to barcode (default 2).
-     -f N   Maximum edit distance to primer+polyT (default 8).
-     -p N   Number of threads (default: 1).
+     -c true/false   Add a _C suffix to the read identifier of any chimeric reads
+                     (default: false). For instance if,
+                       @BC_UMI#READID_+1of2
+                     is chimeric, it will become:
+                       @BC_UMI#READID_+1of2_C
+     -n prefix       Prefix for output filenames.
+     -e N            Maximum edit distance to barcode (default 2).
+     -f N            Maximum edit distance to primer+polyT (default 8).
+     -p N            Number of threads (default: 1).
 
   Specifying adaptor / barcode structure :
      -x sequence Append flanking sequence to search for
@@ -149,12 +154,17 @@ usage: flexiplex [options] [reads_input]
 
      -h     Print this usage information.
 
+Have a different barcode scheme you would like Flexiplex to work with? Post a request at:
+https://github.com/DavidsonGroup/flexiplex/issues
+
+If you use Flexiplex in your research, please cite our paper:
+O. Cheng et al., Flexiplex: a versatile demultiplexer and search tool for omics data, Bioinformatics, Volume 40, Issue 3, 2024
 ```
 
 # Examples of use
 
 ## **NEW** Full long-read single-cell RNA-Seq tutorial
-Now available at (https://davidsongroup.github.io/flexiplex/tutorial.html)[https://davidsongroup.github.io/flexiplex/tutorial.html], which shows how flexiplex can be used in combination with other tools to go from a fastq file to cleaned and deduplicated UMI count matrix.
+Now available at https://davidsongroup.github.io/flexiplex/tutorial.html, which shows how flexiplex can be used in combination with other tools to go from a fastq file to cleaned and deduplicated UMI count matrix.
 
 ## Assigning long reads to 10x barcodes (when barcodes are known)
   
