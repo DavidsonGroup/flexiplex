@@ -11,7 +11,7 @@ For a detailed description of how Flexiplex works and compares against other too
 
 ## Usage
 
-Below are a few things that Flexiplex can do, but we recommend you [**check out the documentation for a more detailed guide**](https://davidsongroup.github.io/flexiplex/).
+Below are a few things that Flexiplex can do, but we recommend you [**check out the documentation for a more detailed guide**](https://davidsongroup.github.io/flexiplex/) or [**try the 10x single-cell long-read RNA-Seq tutorial**](https://davidsongroup.github.io/flexiplex/tutorial.html).
 
 **Assign reads - short reads or single-cell long reads - to cellular barcodes**  
 Presets for various chemistries, including 10x Chromium and Visium, are [available in the docs](https://davidsongroup.github.io/flexiplex/#assigning-long-reads-to-10x-barcodes-when-barcodes-are-known).
