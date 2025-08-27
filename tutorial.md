@@ -290,7 +290,16 @@ As hoped, we get a UMAP showing five well defined clusters of cells:
 
 ![UMAP](/flexiplex/docs/assets/tutorial.umap.png)
 
+The tutorial has been completed! 
 
+Further analyses you could consider undertaking with long-read single-cell data, are:
+  * Genotyping cells by known driver mutations with **flexiplex** - [website](https://davidsongroup.github.io/flexiplex/#genotyping-reads),[paper](https://academic.oup.com/bioinformatics/article/40/3/btae102/7611801)
+  * Calling fusion genes with **JAFFAL** - [website](https://github.com/Oshlack/JAFFA/wiki), [paper](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-021-02588-5), [tutorial](https://docs.google.com/document/d/e/2PACX-1vRKpoWALqrR5Uqc6c--0DVLCUuby7hcmqmHXnKN6xA7knJB7T2QmoWuokGWbDQqrMsPOVh_GU8amIRA/pub)
+  * Testing for differential transcript usage with **Isopod** - [website](https://github.com/michael-nakai/isopod).
+
+If you prefer an all-on-one pipeline for long-read single-cell pre-processing, take a look at [FLAMES](https://www.bioconductor.org/packages/release/bioc/html/FLAMES.html) or [Bambu-clump](https://github.com/GoekeLab/bambu-singlecell-spatial).
+
+This tutorial was written by Nadia M. Davidson, and tested by Oliver Cheng and Shian Su from the Walter and Eliza Hall Institute, 2025. Questions, comments and feedback are welcome.
 
 
 
