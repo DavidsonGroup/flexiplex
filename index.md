@@ -4,10 +4,11 @@
 - [Installing flexiplex](#installing-flexiplex)
 - [Usage](#usage)
 - [Examples of use](#examples-of-use)
+   - [**NEW** Full long-read single-cell RNA-Seq tutorial](https://davidsongroup.github.io/flexiplex/tutorial.html)
    - [Assigning long reads to 10x barcodes (when barcodes are known)](#assigning-long-reads-to-10x-barcodes-when-barcodes-are-known)
    - [Assigning long reads to 10x barcodes (when barcodes are unknown)](#assigning-long-reads-to-10x-barcodes-when-barcodes-are-unknown)
    - [Demultiplexing other read data by barcode](#demultiplexing-other-read-data-by-barcode)
-   - [Assigning genotype to cells - long reads](#assigning-genotype-to-cells---long-reads)
+   - [Assigning genotype to cells - long reads](#genotyping-cells---long-reads)
    - [Assigning genotype to cells - short reads](#assigning-genotype-to-cells---short-reads)
    - [Simple search](#simple-search)
    - [Extracting UMIs from PCR-cDNA ONT data](#extracting-umis-from-pcr-cdna-ont-data)
@@ -151,6 +152,9 @@ usage: flexiplex [options] [reads_input]
 ```
 
 # Examples of use
+
+## **NEW** Full long-read single-cell RNA-Seq tutorial
+Now available at (https://davidsongroup.github.io/flexiplex/tutorial.html)[https://davidsongroup.github.io/flexiplex/tutorial.html], which shows how flexiplex can be used in combination with other tools to go from a fastq file to cleaned and deduplicated UMI count matrix.
 
 ## Assigning long reads to 10x barcodes (when barcodes are known)
   
