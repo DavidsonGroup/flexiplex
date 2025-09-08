@@ -22,7 +22,7 @@ A basic understanding of RNA sequencing data analysis is assumed. Prior experien
 
 ## 0. Prerequisites
 
-Before beginning, the following packages must be installed or already available on a linux based system. Some suggested version numbers (ie. those used to generate the output below, are also provided.
+Before beginning, the following packages must be installed or already available on a linux based system. The package version numbers that we used are shown in parentheses:
  * [**flexiplex** and **flexiplex-filter**](index.html) (1.02.5)
  * [**nailpolish**](https://davidsongroup.github.io/nailpolish/quickstart.html) (0.2.1)
  * [**minimap2**](https://github.com/lh3/minimap2) (2.28)
