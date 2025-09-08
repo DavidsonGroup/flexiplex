@@ -22,12 +22,12 @@ A basic understanding of RNA sequencing data analysis is assumed. Prior experien
 
 ## 0. Prerequisites
 
-Before beginning, the following packages must be installed or already available on a linux based system:
- * [**flexiplex** and **flexiplex-filter**](index.html)
- * [**nailpolish**](https://davidsongroup.github.io/nailpolish/quickstart.html)
- * [**minimap2**](https://github.com/lh3/minimap2)
- * [**oarfish**](https://github.com/COMBINE-lab/oarfish)
- * [**R** and **seurat**](https://satijalab.org/seurat/articles/install_v5.html)
+Before beginning, the following packages must be installed or already available on a linux based system. Some suggested version numbers (ie. those used to generate the output below, are also provided.
+ * [**flexiplex** and **flexiplex-filter**](index.html) (1.02.5)
+ * [**nailpolish**](https://davidsongroup.github.io/nailpolish/quickstart.html) (0.2.1)
+ * [**minimap2**](https://github.com/lh3/minimap2) (2.28)
+ * [**oarfish**](https://github.com/COMBINE-lab/oarfish) (0.9.0)
+ * [**R** and **seurat**](https://satijalab.org/seurat/articles/install_v5.html) (4.4.2, 5.3.0)
 
 You will also need to download the demo dataset, [scmixology2_250k.fastq.gz](https://figshare.com/ndownloader/files/57350216)
 ```
@@ -195,9 +195,9 @@ The resulting data will be a mixture of original (singlet) and consensus (duplic
 
 ## 5. Read Mapping
 
-We are now ready to align the reads. As we'll be using **oarfish** for quantification, mapping is done against the reference transcriptome. In this instance gencode (downloaded in step 0).
+We are now ready to align the reads. As we'll be using **oarfish** for quantification, mapping is done against the reference transcriptome. In this instance gencode (downloaded in step 0). If you wish you align against a reference genome, different options are required and you should check the minimap2 documentation.
 ```bash
-minimap2 --rev-only -y -ax map-ont gencode.v48.transcripts.fa \
+minimap2 --rev-only -y -N 100 -ax map-ont gencode.v48.transcripts.fa \
       scmixology2_250k.demultiplexed.deduplicated.fastq |\
       samtools view -b |\
       samtools sort -t CB \
