@@ -26,6 +26,7 @@ Before beginning, the following packages must be installed or already available 
  * [**flexiplex** and **flexiplex-filter**](index.html) (1.02.5)
  * [**nailpolish**](https://davidsongroup.github.io/nailpolish/quickstart.html) (0.2.1)
  * [**minimap2**](https://github.com/lh3/minimap2) (2.28)
+ * [**samtools**](https://www.htslib.org/) (1.22.1)
  * [**oarfish**](https://github.com/COMBINE-lab/oarfish) (0.9.0)
  * [**R** and **seurat**](https://satijalab.org/seurat/articles/install_v5.html) (4.4.2, 5.3.0)
 
