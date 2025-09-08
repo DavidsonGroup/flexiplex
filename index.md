@@ -50,8 +50,10 @@ For all the invocations of flexiplex-filter in this documentation, you can run i
 Alternatively, you can install inside a virtual environment. flexiplex-filter has been tested on Python 3.9, but should work for relatively modern versions of Python.
 
 ```sh
-# create virtual environment
+# change into the scripts directory
 cd <path_to_flexiplex_dir>/scripts
+
+# create virtual environment
 python -m venv .venv
 
 # activate virtual environment (you must do this every time you run flexiplex-filter)
@@ -80,6 +82,24 @@ Replacing <x.y> with the latest version number.
 The `flexiplex` binary will now be available in the `flexiplex-<x.y>` folder.
 
 Alternatively, you can copy the binary to `/usr/local/bin` with `make install`.
+
+Then install flexiplex-filter as before, using uv or:
+```sh
+# change into the scripts directory
+cd <path_to_flexiplex_dir>/scripts
+
+# create virtual environment
+python -m venv .venv
+
+# activate virtual environment (you must do this every time you run flexiplex-filter)
+source .venv/bin/activate
+
+# install
+pip install .
+
+# now you can run:
+flexiplex-filter <parameters>
+```
 
 
 ### Conda
