@@ -10,3 +10,5 @@ compile_commands.json
 **/.DS_Store
 flexiplex.dSYM/
 debug/
+
+**/flexiplex_reads_barcodes.txt

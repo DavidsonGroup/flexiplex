@@ -214,12 +214,14 @@ std::string get_umi(const std::string &seq,
 
   int umi_start, umi_length;
   std::string umi_pad = "";
-  umi_length = search_pattern[umi_index].second.length();
 
   if (umi_index == -1) {
     return ""; // protocol does not have UMI
+  }
 
-  } else if (umi_index == bc_index + 1) {
+  umi_length = search_pattern[umi_index].second.length();
+  
+  if (umi_index == bc_index + 1) {
     // UMI right after BC
     if (sliding_window_match) {
       umi_start = left_bound + endDistance;
@@ -232,12 +234,11 @@ std::string get_umi(const std::string &seq,
       umi_pad = std::string(search_pattern[umi_index].second.length() - umi_length, 'N');
     }
     return seq.substr(umi_start, umi_length) + umi_pad;
-
   } else if (umi_index == bc_index - 1) {
     // UMI right before BC
     int bc_start = sliding_window_match ? left_bound + endDistance : read_to_subpatterns[bc_index];
     // umi should start umi_offset bases before BC
-    int umi_offset = search_pattern[bc_index].second.length() + search_pattern[umi_index].second.length();
+    int umi_offset = search_pattern[umi_index].second.length();
     if (bc_start < umi_offset) {
       // not enough bases before BC
       umi_pad = std::string(umi_offset - bc_start, 'N');
@@ -246,6 +247,8 @@ std::string get_umi(const std::string &seq,
     } else {
       umi_start = bc_start - umi_offset;
     }
+    auto temp = seq.substr(umi_start, umi_length) + umi_pad;
+
     return umi_pad + seq.substr(umi_start, umi_length);
 
   } else {

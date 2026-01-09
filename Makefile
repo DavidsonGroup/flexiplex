@@ -8,8 +8,11 @@ PYTHON?=python3
 
 all: flexiplex
 
-flexiplex: flexiplex.c++ 
+flexiplex: flexiplex.c++
 	${CXX} $^ -Ofast -pthread -std=c++11 -o $@ edlib-1.2.7/edlib.cpp -I edlib-1.2.7/ ${CFLAGS}
+
+flexiplex-debug: flexiplex.c++
+	${CXX} $^ -g -O0 -pthread -std=c++11 -o flexiplex edlib-1.2.7/edlib.cpp -I edlib-1.2.7/ ${CFLAGS}
 
 clean:
 	rm flexiplex 
@@ -19,7 +22,7 @@ install:
 	${PYTHON} -m pip install scripts/
 
 test: flexiplex
-	@bash -c "if diff --color tests/output.fastq <(./flexiplex -k tests/barcodes.txt -b GGGG -x TTT tests/input.fastq 2>/dev/null); then echo 'Test success'; else echo 'Test fail'; fi"
+	@bash -c "./tests/integration_tests.sh"
 
 uninstall:
 	rm ${DIR}/flexiplex
