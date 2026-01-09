@@ -695,14 +695,14 @@ int main(int argc, char **argv) {
       string bc;
       /**** READ BARCODE LIST FROM FILE ******/
       file.open(file_name);
-      cerr << "Setting known barcodes from " << file_name << "\n";
       if (!(file.good())) { // if the string given isn't a file
+        cerr << "Reading known barcodes from string: " << file_name << "\n";
         stringstream bc_list(file_name);
-        string s;
         while (getline(bc_list, bc, ',')) // tokenize
           known_barcodes.insert(bc);
       } else {
         // otherwise get the barcodes from the file..
+        cerr << "Setting known barcodes from " << file_name << "\n";
         while (getline(file, line)) {
           istringstream line_stream(line);
           line_stream >> bc;
