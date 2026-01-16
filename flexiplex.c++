@@ -32,6 +32,17 @@ using namespace std;
 // e.g. 1.00.1 (dev) goes to 1.01 (release)
 const static string VERSION="1.02.5";
 
+enum SegmentType { FIXED, MATCHED, RANDOM };
+
+struct Segment {
+    SegmentType type;
+    std::string pattern;
+    std::string name; // e.g., "BC1", "UMI", "Primer1"
+    std::string bc_list_name; // Only for MATCHED, refers to a key in known_barcodes_map
+    int buffer_size;            // Only for MATCHED
+    int max_edit_distance;      // Only for MATCHED
+};
+
 struct PredefinedStruct {
   string description;
   string params;
@@ -72,6 +83,9 @@ void print_usage(){
   cerr << "                       @BC_UMI#READID_+1of2\n";
   cerr << "                     is chimeric, it will become:\n";
   cerr << "                       @BC_UMI#READID_+1of2_C\n";
+  cerr << "                     Reads are considered chimeric if barcodes are found on both\n";
+  cerr << "                     forward and reverse strands.\n";
+  // what about when only one strand has multiple barcodes?
   cerr << "     -n prefix       Prefix for output filenames.\n";
   cerr << "     -e N            Maximum edit distance to barcode (default 2).\n";
   cerr << "     -f N            Maximum edit distance to primer+polyT (default 8).\n";
@@ -79,15 +93,19 @@ void print_usage(){
 
   cerr << "  Specifying adaptor / barcode structure : \n";
   cerr << "     -x sequence Append flanking sequence to search for\n";
-  cerr << "     -b sequence Append the barcode pattern to search for\n";
-  cerr << "     -u sequence Append the UMI pattern to search for\n";
-  cerr << "     Notes:\n";
-  cerr << "          The order of these options matters\n";
-  cerr << "          ? - can be used as a wildcard\n";
+  cerr << "     -b sequence Append the barcode pattern to search for (named CB by default)\n";
+  cerr << "     -u sequence[,name:<name>] Append the UMI pattern to search for\n";
+  cerr << "                 (named UB, UB2, UB3... by default if name not provided)\n";
+  cerr << "     -B sequence[,name:<name>][,list:<file>][,buffer:<size>][,max_ed:<dist>]\n";
+  cerr << "                 Append a barcode pattern with optional parameters\n";
+  cerr << "                 - name: specify the name of the barcode segment (defaults to BC1, BC2...)\n";
+  cerr << "                 - list: specify a file containing expected barcodes for this segment\n";
+  cerr << "                 - buffer: number of bases to extend search region on either side (default 5)\n";
+  cerr << "                 - max_ed: maximum edit distance for this segment (default is global -e value)\n";
   cerr << "     When no search pattern x,b,u option is provided, the following default pattern is used: \n";
   cerr << "          primer: CTACACGACGCTCTTCCGATCT\n";
-  cerr << "          barcode: ????????????????\n";
-  cerr << "          UMI: ????????????\n";
+  cerr << "          barcode (CB): ????????????????\n";
+  cerr << "          UMI (UB): ????????????\n";
   cerr << "          polyT: TTTTTTTTT\n";
   cerr << "     which is the same as providing: \n";
   cerr << "         -x CTACACGACGCTCTTCCGATCT -b ???????????????? -u ???????????? -x TTTTTTTTT\n\n";
@@ -127,13 +145,11 @@ void reverse_complement(string & seq){
 
 //Holds the found barcode and associated information
 struct Barcode {
-  string barcode;
-  string umi;
-  int editd;
+  std::map<std::string, std::string> features; // Map of segment name to extracted sequence
   int flank_editd;
   int flank_start;
   int flank_end;
-  bool unambiguous;
+  bool found_all_matched_segments;
 } ;
 
 struct SearchResult {
@@ -246,86 +262,22 @@ unsigned int edit_distance(const std::string& s1, const std::string& s2, unsigne
   return best; // return edit distance
 }
 
-// extract UMI from the read after barcode matching
-std::string get_umi(const std::string &seq,
-                    const std::vector<std::pair<std::string, std::string>> &search_pattern,
-                    const std::vector<int> &read_to_subpatterns,
-                    const int umi_index, const int bc_index,
-                    const bool sliding_window_match, // if true, use left_bound and endDistance
-                    const int left_bound,
-                    const int endDistance
-                    ) {
 
-  int umi_start, umi_length;
-  std::string umi_pad = "";
-  umi_length = search_pattern[umi_index].second.length();
-
-  if (umi_index == -1) {
-    return ""; // protocol does not have UMI
-
-  } else if (umi_index == bc_index + 1) {
-    // UMI right after BC
-    if (sliding_window_match) {
-      umi_start = left_bound + endDistance;
-    } else {
-      umi_start = read_to_subpatterns[bc_index] + search_pattern[bc_index].second.length();
-    }
-    if (seq.length() < umi_start + umi_length) {
-      // read not long enough, pad N to the end
-      umi_length = seq.length() - umi_start;
-      umi_pad = std::string(search_pattern[umi_index].second.length() - umi_length, 'N');
-    }
-    return seq.substr(umi_start, umi_length) + umi_pad;
-
-  } else if (umi_index == bc_index - 1) {
-    // UMI right before BC
-    int bc_start = sliding_window_match ? left_bound + endDistance : read_to_subpatterns[bc_index];
-    // umi should start umi_offset bases before BC
-    int umi_offset = search_pattern[bc_index].second.length() + search_pattern[umi_index].second.length();
-    if (bc_start < umi_offset) {
-      // not enough bases before BC
-      umi_pad = std::string(umi_offset - bc_start, 'N');
-      umi_start = 0;
-      umi_length -= umi_offset - bc_start;
-    } else {
-      umi_start = bc_start - umi_offset;
-    }
-    return umi_pad + seq.substr(umi_start, umi_length);
-
-  } else {
-    // UMI not next to BC, no idea which side was truncated
-    if (read_to_subpatterns.size() > umi_index + 1) {
-      // UMI is not the last subpattern
-      // use the start of the next subpattern as the end of UMI
-      umi_start = read_to_subpatterns[umi_index];
-      umi_length = min((int)read_to_subpatterns[umi_index + 1] - umi_start, umi_length);
-      umi_pad = std::string(search_pattern[umi_index].second.length() - umi_length, 'N');
-      return seq.substr(umi_start, umi_length) + umi_pad;
-    } else {
-      // UMI is the last subpattern
-      umi_start = read_to_subpatterns[umi_index];
-      umi_length = min((int) seq.length() - umi_start, umi_length);
-      umi_pad = std::string(search_pattern[umi_index].second.length() - umi_length, 'N');
-      return seq.substr(umi_start, umi_length) + umi_pad;
-    }
-  }
-}
 
 // Given a string 'seq' search for substring with primer and polyT sequence followed by
 // a targeted search in the region for barcode
 // Sequence seearch is performed using edlib
 
-Barcode get_barcode(string & seq,
-		    const unordered_set<string> *known_barcodes,
-		    int flank_max_editd,
-		    int barcode_max_editd,
-        const std::vector<std::pair<std::string, std::string>> &search_pattern) {
-
-  const int OFFSET=5; //wiggle room in bases of the expected barcode start site to search.
+Barcode extract_features(string & seq,
+		    const std::vector<Segment> &segments,
+		    const std::unordered_map<std::string, std::unordered_set<std::string>> *known_barcodes_map,
+		    int global_flank_max_editd,
+		    int global_barcode_edit_distance) {
 
   //initialise struct variables for return:
-  Barcode barcode;
-  barcode.editd=100; barcode.flank_editd=100; barcode.unambiguous = false;
+  Barcode barcode_result;
+  barcode_result.found_all_matched_segments = true;
+  barcode_result.flank_editd=100;
 
   //initialise edlib configuration
   // Use IUPAC codes
@@ -342,170 +294,160 @@ Barcode get_barcode(string & seq,
     {'D', 'A'}, {'D', 'G'}, {'D', 'T'},
     {'V', 'A'}, {'V', 'C'}, {'V', 'G'}
   };
-  EdlibAlignConfig edlibConf = {flank_max_editd, EDLIB_MODE_HW, EDLIB_TASK_PATH, additionalEqualities, 28};
+  EdlibAlignConfig edlibConf = {global_flank_max_editd, EDLIB_MODE_HW, EDLIB_TASK_PATH, additionalEqualities, 28};
 
   // concatenate patterns in search_pattern in insertion order
-  std::string search_string;
-  for (const auto &pair : search_pattern) {
-    search_string += pair.second;
+  std::string search_string_template;
+  std::vector<long unsigned int> segment_lengths;
+  for (const auto &segment : segments) {
+    search_string_template += segment.pattern;
+    segment_lengths.push_back(segment.pattern.length());
   }
 
   // shorter than the pattern, skip search
-  if (seq.length() < search_string.length()) {
-    return barcode;
+  if (seq.length() < search_string_template.length()) {
+    return barcode_result;
   }
 
   //search for the concatenated pattern
-  EdlibAlignResult result = edlibAlign(search_string.c_str(), search_string.length(), seq.c_str(), seq.length(), edlibConf);
-  if(result.status != EDLIB_STATUS_OK || result.numLocations==0 ){
+  EdlibAlignResult result = edlibAlign(search_string_template.c_str(), search_string_template.length(), seq.c_str(), seq.length(), edlibConf);
+  if(result.status != EDLIB_STATUS_OK || result.numLocations==0 || result.editDistance == -1 ){
     edlibFreeAlignResult(result);
-    return(barcode); // no match found - return
+    return(barcode_result); // no match found - return
   } //fill in info about found primer and polyT location
-  barcode.flank_editd=result.editDistance;
-  barcode.flank_start=result.startLocations[0];
-  barcode.flank_end=result.endLocations[0];
+  barcode_result.flank_editd=result.editDistance;
+  barcode_result.flank_start=result.startLocations[0];
+  barcode_result.flank_end=result.endLocations[0];
 
-  // Extract sub-patterns from aligment directly
-  std::vector<long unsigned int> subpattern_lengths;
-  for (const auto &pair : search_pattern) {
-    subpattern_lengths.push_back(pair.second.length());
-  }
+  std::vector<long unsigned int> segment_template_ends;
+  segment_template_ends.resize(segment_lengths.size());
+  std::partial_sum(segment_lengths.begin(), segment_lengths.end(), segment_template_ends.begin());
 
-  std::vector<long unsigned int> subpattern_ends;
-  subpattern_ends.resize(subpattern_lengths.size());
-  std::partial_sum(subpattern_lengths.begin(), subpattern_lengths.end(), subpattern_ends.begin());
-
-  vector<int> read_to_subpatterns;
-  read_to_subpatterns.reserve(subpattern_ends.size() + 1);
-  read_to_subpatterns.emplace_back(barcode.flank_start);
+  vector<int> read_to_segment_starts;
+  read_to_segment_starts.reserve(segment_template_ends.size() + 1);
+  read_to_segment_starts.emplace_back(barcode_result.flank_start);
 
   // initialise pointers
-  int i_read = barcode.flank_start;
+  int i_read = barcode_result.flank_start;
   int i_pattern = 0;
-  int i_subpattern = 0;
+  int i_segment = 0;
 
   // walk through edlib aligment
   // 0 for match
-  // 1 for insertion to target
-  // 2 for insertion to query
+  // 1 for insertion to target (read)
+  // 2 for insertion to query (template)
   // 3 for mismatch
   std::vector<unsigned char> alignment_vector(result.alignment, result.alignment + result.alignmentLength);
   for (const auto& value : alignment_vector) {
-    if (value != 1) {
+    if (value != EDLIB_EDOP_INSERT) { // If not an insertion in the read
       i_read++;
     }
-    if (value != 2) {
+    if (value != EDLIB_EDOP_DELETE) { // If not an insertion in the template
       i_pattern++;
     }
-    if (i_subpattern < subpattern_ends.size() && i_pattern >= subpattern_ends[i_subpattern]) {
-      read_to_subpatterns.emplace_back(i_read);
-      i_subpattern++;
+    if (i_segment < segment_template_ends.size() && i_pattern >= segment_template_ends[i_segment]) {
+      read_to_segment_starts.emplace_back(i_read);
+      i_segment++;
     }
   }
-
   edlibFreeAlignResult(result);
 
+  // Extract and validate features for each segment
+  for (size_t i = 0; i < segments.size(); ++i) {
+    const Segment& s = segments[i];
+    int segment_read_start = read_to_segment_starts[i];
+    int segment_read_end = (i + 1 < read_to_segment_starts.size()) ? read_to_segment_starts[i+1] : barcode_result.flank_end;
+    int extracted_length = segment_read_end - segment_read_start;
 
-  // Work out the index of BC and UMI in the pattern
-  // TODO: Should this be done in main to be more efficient?
-  // TODO: Handle edge cases where BC / UMI is not speficied in the pattern
-  int bc_index = -1, umi_index = -1;
-  auto it_pattern =
-      std::find_if(search_pattern.begin(), search_pattern.end(),
-                   [](const std::pair<std::string, std::string> &pair) {
-                     return pair.first == "BC";
-                   });
-  if (it_pattern != search_pattern.end()) {
-    bc_index = std::distance(search_pattern.begin(), it_pattern);
-  } else {
-    // error
-  }
-  it_pattern =
-      std::find_if(search_pattern.begin(), search_pattern.end(),
-                   [](const std::pair<std::string, std::string> &pair) {
-                     return pair.first == "UMI";
-                   });
-  if (it_pattern != search_pattern.end()) {
-    umi_index = std::distance(search_pattern.begin(), it_pattern);
-  } else {
-    // error
-  }
+    if (extracted_length < 0) extracted_length = 0; // Should not happen with correct alignment
 
-  //if not checking against known list of barcodes, return sequence after the primer
-  //also check for a perfect match straight up as this will save computer later.
-  //
-  // read_to_subpatterns[subpattern_index] gives start of subpattern in the read
-  std::string exact_bc = seq.substr(
-      read_to_subpatterns[bc_index],
-      search_pattern[bc_index].second.length());
-  if (known_barcodes->size()==0 || (known_barcodes->find(exact_bc) != known_barcodes->end())){
-    barcode.barcode=exact_bc;
-    barcode.editd=0;
-    barcode.unambiguous=true;
-    barcode.umi = get_umi(seq, search_pattern, read_to_subpatterns, umi_index, bc_index, false, 0, 0);
-    return(barcode);
-  }
+    std::string extracted_seq = seq.substr(segment_read_start, extracted_length);
 
-  // otherwise widen our search space and the look for matches with errors
+    if (s.type == MATCHED) {
+      const unordered_set<string>* current_bclist = nullptr;
 
-  int left_bound = max(
-    (int)read_to_subpatterns[bc_index] - OFFSET, // widen the search by using an OFFSET
-    0                                       // set a maximum starting character index of 0
-  );
-  int max_length = search_pattern[bc_index].second.length() + 2 * OFFSET;
-  if (left_bound + max_length > seq.length()) {
-      max_length = seq.length() - left_bound;
-  }
-
-  std::string barcode_seq = seq.substr(left_bound, max_length);
-
-  //iterate over all the known barcodes, checking each sequentially
-  auto known_barcodes_itr=known_barcodes->begin();
-  unsigned int editDistance, endDistance;
-
-  for(; known_barcodes_itr != known_barcodes->end(); known_barcodes_itr++){
-    search_string = *known_barcodes_itr; //known barcode to check against
-    editDistance = edit_distance(barcode_seq, search_string, endDistance, barcode_max_editd);
-
-    if (editDistance == barcode.editd) {
-      barcode.unambiguous = false;
-    } else if (editDistance < barcode.editd && editDistance <= barcode_max_editd) { // if best so far, update
-      barcode.unambiguous = true;
-      barcode.editd = editDistance;
-      barcode.barcode = *known_barcodes_itr;
-      barcode.umi = get_umi(seq, search_pattern, read_to_subpatterns, umi_index, bc_index, true, left_bound, endDistance);
-
-      //if perfect match is found we're done.
-      if (editDistance == 0) {
-      	return(barcode);
+      if (!s.bc_list_name.empty()) {
+          auto it = known_barcodes_map->find(s.bc_list_name);
+          if (it != known_barcodes_map->end()) {
+              current_bclist = &(it->second);
+          }
+      } else if (known_barcodes_map->count("global")) {
+          current_bclist = &(known_barcodes_map->at("global"));
       }
-    }
 
+      if (current_bclist && !current_bclist->empty()) {
+        // Apply buffer for search
+        int search_start = max(0, segment_read_start - s.buffer_size);
+        int search_end = min((int)seq.length(), segment_read_end + s.buffer_size);
+        std::string search_region = seq.substr(search_start, search_end - search_start);
+
+        unsigned int best_edit_distance = 100; // Higher than any reasonable max_ed
+        std::string best_barcode_match = "";
+        bool current_segment_unambiguous = false;
+
+        for (const auto& known_bc : *current_bclist) {
+          unsigned int editDistance, endDistance;
+          editDistance = edit_distance(search_region, known_bc, endDistance, s.max_edit_distance);
+
+          if (editDistance == best_edit_distance) {
+            current_segment_unambiguous = false;
+          } else if (editDistance < best_edit_distance && editDistance <= s.max_edit_distance) {
+            current_segment_unambiguous = true;
+            best_edit_distance = editDistance;
+            best_barcode_match = known_bc;
+          }
+        }
+        if (best_edit_distance <= s.max_edit_distance && current_segment_unambiguous) {
+            barcode_result.features[s.name] = best_barcode_match;
+        } else {
+            barcode_result.found_all_matched_segments = false;
+        }
+      } else { // No allow list provided
+        cerr << "Error: No barcode list found for segment " << s.name << ".\n";
+        exit(1);
+      }
+    } else if (s.type == RANDOM) {
+      int extract_start = max(0, segment_read_start);
+      int extract_end = min((int)seq.length(), segment_read_end);
+      extracted_seq = seq.substr(extract_start, extract_end - extract_start);
+      barcode_result.features[s.name] = extracted_seq;
+    } else if (s.type == FIXED) {
+      // For fixed segments, we just note their presence or can store the extracted sequence if needed
+      // For now, we don't store fixed segments in features map unless explicitly asked.
+      // barcode_result.features[s.name] = extracted_seq;
+    }
   }
-  return(barcode); //return the best matched barcode and associated information
+
+  return(barcode_result); //return the best matched barcode and associated information
 }
 
-//search a read for one or more barcodes (parent function that calls get_barcode)
-vector<Barcode> big_barcode_search(const string & sequence, const unordered_set<string> & known_barcodes, int max_flank_editd, int max_editd, const std::vector<std::pair<std::string, std::string>> &search_pattern) {
-    vector<Barcode> return_vec; //vector of all the barcodes found
+vector<Barcode> big_barcode_search(const string & sequence,
+                                   const std::unordered_map<std::string, std::unordered_set<std::string>> *known_barcodes_map,
+                                   int global_flank_max_editd,
+                                   int global_barcode_edit_distance,
+                                   const std::vector<Segment> &segments) {
+    vector<Barcode> return_vec;
     string masked_sequence = sequence; // Work on a copy
 
     while (true) {
-      //search for barcode
-      Barcode result=get_barcode(masked_sequence, &known_barcodes, max_flank_editd, max_editd, search_pattern);
-      if(result.editd <= max_editd && result.unambiguous) { //add to return vector if edit distance small enough
-        return_vec.push_back(result);
-        // Mask the found region to prevent re-finding it
-        int flank_length = result.flank_end - result.flank_start;
-        if (flank_length > 0)
-          masked_sequence.replace(result.flank_start, flank_length, string(flank_length, 'X'));
-        else // if flank_length is 0, we risk an infinite loop
+        Barcode result = extract_features(masked_sequence, segments, known_barcodes_map, global_flank_max_editd, global_barcode_edit_distance);
+        if (result.flank_editd <= global_flank_max_editd && result.found_all_matched_segments) {
+            return_vec.push_back(result);
+
+            // Mask the found region to prevent re-finding it
+            // result.flank_end is inclusive, so length is end - start + 1
+            int match_length = result.flank_end - result.flank_start + 1;
+
+            if (match_length > 0) {
+                masked_sequence.replace(result.flank_start, match_length, string(match_length, 'X'));
+            } else {
+                break; // Should not happen for valid match, but prevents infinite loop
+            }
+        } else {
             break;
-      } else {
-        break; // No more barcodes found
-      }
+        }
     }
-    return(return_vec);
+    return return_vec;
 }
 
 
@@ -524,13 +466,20 @@ bool get_bool_opt_arg(string value){
 }
 
 // print information about barcodes
-void print_stats(const string& read_id, const vector<Barcode> & vec_bc, ostream & out_stream){
+void print_stats(const string& read_id, const vector<Barcode> & vec_bc, ostream & out_stream, const std::vector<Segment> &segments){
   for(int b=0; b<vec_bc.size() ; b++){
-    out_stream << read_id << "\t"
-	       << vec_bc.at(b).barcode << "\t"
-	       << vec_bc.at(b).flank_editd << "\t"
-	       << vec_bc.at(b).editd << "\t"
-	       << vec_bc.at(b).umi << "\n";
+    out_stream << read_id;
+    for (const auto& s : segments) {
+        if (s.type != FIXED) {
+            auto it = vec_bc.at(b).features.find(s.name);
+            if (it != vec_bc.at(b).features.end()) {
+                out_stream << "\t" << it->second;
+            } else {
+                out_stream << "\t";
+            }
+        }
+    }
+    out_stream << "\t" << vec_bc.at(b).flank_editd << "\n";
   }
 }
 
@@ -557,37 +506,54 @@ void print_read(const string& read_id, const string& read, string qual,
 		bool split, map<string, ofstream> & barcode_file_streams,
         mutex & cout_mutex, mutex & file_mutex,
 		bool trim_barcodes,
-    bool chimeric){
+    bool chimeric,
+    const std::vector<Segment> &segments){
 
     auto vec_size = vec_bc.size();
 
-    //loop over the barcodes found... usually will just be one
     for (int b = 0; b < vec_size; b++) {
-
-      // format the new read id. Using FLAMES format.
-      stringstream ss;
-      ss << (b + 1) << "of" << vec_size;
+      stringstream ss_id_suffix;
+      ss_id_suffix << (b + 1) << "of" << vec_size;
       if (chimeric) {
-        ss << "_" << "C";
+        ss_id_suffix << "_" << "C";
       }
 
-      string barcode = vec_bc.at(b).barcode;
-      // also add the proper FASTQ way: \tCB:Z:barcode\tUB:Z:umi
-      string new_read_id =
-          barcode + "_" + vec_bc.at(b).umi + "#" + read_id + ss.str() + "\tCB:Z:" + barcode + "\tUB:Z:" + vec_bc.at(b).umi;
+      stringstream new_read_id_ss;
+      string primary_barcode_for_filename = "";
 
-      // work out the start and end base in case multiple barcodes
-      // note: read_start+1, see issue #63
+      for (const auto& s : segments) {
+          if (s.type != FIXED) {
+              auto it = vec_bc.at(b).features.find(s.name);
+              if (it != vec_bc.at(b).features.end()) {
+                  new_read_id_ss << it->second << "_";
+                  if (s.type == MATCHED && primary_barcode_for_filename.empty()) {
+                      primary_barcode_for_filename = it->second;
+                  }
+              } else {
+                  new_read_id_ss << "NA_";
+              }
+          }
+      }
+      string new_read_id_prefix = new_read_id_ss.str();
+      if (!new_read_id_prefix.empty() && new_read_id_prefix.back() == '_') {
+          new_read_id_prefix.pop_back();
+      }
+
+      string new_read_id = new_read_id_prefix + "#" + read_id + ss_id_suffix.str();
+
+      for (const auto& s : segments) {
+          if (s.type != FIXED) {
+              auto it = vec_bc.at(b).features.find(s.name);
+              if (it != vec_bc.at(b).features.end()) {
+                  new_read_id += "\t" + s.name + ":Z:" + it->second;
+              }
+          }
+      }
+
       int read_start = vec_bc.at(b).flank_end + 1;
       int read_length = read.length() - read_start;
 
-      for (int f = 0; f < vec_size; f++) {
-        int temp_read_length = vec_bc.at(f).flank_start - read_start;
-        if (temp_read_length >= 0 && temp_read_length < read_length)
-          read_length = temp_read_length;
-      }
-      string qual_new = ""; // don't trim the quality scores if it's a fasta file
-
+      string qual_new = "";
       if (qual != "") {
         if((read_start+read_length)>(qual.length())){
             lock_guard<mutex> lock(cout_mutex);
@@ -598,28 +564,24 @@ void print_read(const string& read_id, const string& read, string qual,
       }
       string read_new = read.substr(read_start, read_length);
 
-      if (b == 0 && !trim_barcodes) { // override if read shouldn't be cut
+      if (b == 0 && !trim_barcodes) {
         new_read_id = read_id;
         read_new = read;
         qual_new = qual;
-        b = vec_size; // force loop to exit after this iteration
       }
 
-      // Skip reads that become empty after trimming
       if (read_new.length() == 0) {
         continue;
       }
 
-      if (split) { // to a file if spliting by barcode
+      if (split) {
         lock_guard<mutex> lock(file_mutex);
-        // Check if the file stream is already open
-        if (barcode_file_streams.find(barcode) == barcode_file_streams.end()) {
-            // If not, open it for the first time and add it to the map
-            string outname = prefix + "_" + barcode + (qual.empty() ? ".fasta" : ".fastq");
-            barcode_file_streams[barcode].open(outname);
+        string barcode_for_split = primary_barcode_for_filename.empty() ? "UNKNOWN" : primary_barcode_for_filename;
+        if (barcode_file_streams.find(barcode_for_split) == barcode_file_streams.end()) {
+            string outname = prefix + "_" + barcode_for_split + (qual.empty() ? ".fasta" : ".fastq");
+            barcode_file_streams[barcode_for_split].open(outname);
         }
-        // Write to the already open stream
-        print_line(new_read_id, read_new, qual_new, barcode_file_streams[barcode]);
+        print_line(new_read_id, read_new, qual_new, barcode_file_streams[barcode_for_split]);
       } else {
         lock_guard<mutex> lock(cout_mutex);
         print_line(new_read_id, read_new, qual_new, std::cout);
@@ -631,22 +593,22 @@ void print_read(const string& read_id, const string& read, string qual,
 void search_worker(
     ThreadSafeQueue<SearchResult*> &work_queue,
     ThreadSafeQueue<SearchResult*> &results_queue,
-    const unordered_set<string> &known_barcodes,
+    const std::unordered_map<std::string, std::unordered_set<std::string>> &known_barcodes_map,
     int flank_edit_distance,
-    int edit_distance,
-    const std::vector<std::pair<std::string, std::string>> &search_pattern
+    int global_barcode_edit_distance,
+    const std::vector<Segment> &search_pattern
 ) {
     SearchResult* sr_ptr;
     while (work_queue.pop(sr_ptr) && sr_ptr) {
         //forward search
-        sr_ptr->vec_bc_for = big_barcode_search(sr_ptr->line, known_barcodes, flank_edit_distance, edit_distance, search_pattern);
+        sr_ptr->vec_bc_for = big_barcode_search(sr_ptr->line, &known_barcodes_map, flank_edit_distance, global_barcode_edit_distance, search_pattern);
 
         // get reverse complement
         sr_ptr->rev_line = sr_ptr->line;
         reverse_complement(sr_ptr->rev_line);
 
         //Check the reverse complement of the read
-        sr_ptr->vec_bc_rev = big_barcode_search(sr_ptr->rev_line, known_barcodes, flank_edit_distance, edit_distance, search_pattern);
+        sr_ptr->vec_bc_rev = big_barcode_search(sr_ptr->rev_line, &known_barcodes_map, flank_edit_distance, global_barcode_edit_distance, search_pattern);
 
         sr_ptr->count = sr_ptr->vec_bc_for.size() + sr_ptr->vec_bc_rev.size();
         sr_ptr->chimeric = !sr_ptr->vec_bc_for.empty() && !sr_ptr->vec_bc_rev.empty();
@@ -684,10 +646,16 @@ int main(int argc, char **argv) {
   bool remove_barcodes = true;        //(i)
   bool print_chimeric = false;        //(c)
 
-  std::vector<std::pair<std::string, std::string>> search_pattern;
+  std::vector<Segment> search_pattern;
 
-  // Set of known barcodes
-  unordered_set<string> known_barcodes;
+  // Set of known barcodes (can be multiple, identified by name)
+  std::unordered_map<std::string, std::unordered_set<std::string>> known_barcodes_map;
+  // Flag to track if any -B segment specified its own barcode list
+  bool individual_bclist_specified = false;
+
+  // Counters for automatic naming
+  int barcode_count = 0;
+  int umi_count = 0;
 
   // threads
   int n_threads = 1;
@@ -703,7 +671,7 @@ int main(int argc, char **argv) {
   
 
   while ((c = getopt(myArgs.size(), myArgs.data(),
-                     "d:k:i:b:u:x:e:f:n:s:hp:c:")) != EOF) {
+                     "d:k:i:b:u:x:e:f:n:s:hp:c:B:")) != EOF) {
     switch (c) {
     case 'd': { // d=predefined list of settings for various search/barcode schemes
       if (predefinedMap.find(optarg) == predefinedMap.end()) {
@@ -727,31 +695,38 @@ int main(int argc, char **argv) {
       allocated_args.insert(allocated_args.end(), newArgv.begin(), newArgv.end());
       break;
     }
-    case 'k': { // k=list of known barcodes
+    case 'k': { // k=list of known barcodes (global barcode list)
+      if (individual_bclist_specified) {
+        cerr << "Error: Cannot use -k when -B segments have specified their own barcode files.\n";
+        print_usage();
+        exit(1);
+      }
       string file_name(optarg);
       string bc;
+      unordered_set<string> global_bclist;
       /**** READ BARCODE LIST FROM FILE ******/
       file.open(file_name);
       if (!(file.good())) { // if the string given isn't a file
         cerr << "Reading known barcodes from string: " << file_name << "\n";
         stringstream bc_list(file_name);
         while (getline(bc_list, bc, ',')) // tokenize
-          known_barcodes.insert(bc);
+          global_bclist.insert(bc);
       } else {
         // otherwise get the barcodes from the file..
         cerr << "Setting known barcodes from " << file_name << "\n";
         while (getline(file, line)) {
           istringstream line_stream(line);
           line_stream >> bc;
-          known_barcodes.insert(bc);
+          global_bclist.insert(bc);
         }
         file.close();
       }
-      cerr << "Number of known barcodes: " << known_barcodes.size() << "\n";
-      if (known_barcodes.size() == 0) {
+      cerr << "Number of known barcodes in global list: " << global_bclist.size() << "\n";
+      if (global_bclist.empty()) {
         print_usage();
         exit(1); // case barcode file is empty
       }
+      known_barcodes_map["global"] = global_bclist;
       params += 2;
       break;
     }
@@ -763,7 +738,7 @@ int main(int argc, char **argv) {
     }
     case 'e': {
       edit_distance = atoi(optarg);
-      cerr << "Setting max barcode edit distance to " << edit_distance << "\n";
+      cerr << "Setting max barcode edit distance to " << edit_distance << " (global default).\n";
       params += 2;
       break;
     }
@@ -774,22 +749,174 @@ int main(int argc, char **argv) {
       params += 2;
       break;
     }
-    // x, u, b arguments inserts subpatterns to search_pattern
-    case 'x': {
-      search_pattern.push_back(std::make_pair("Unnamed Seq", optarg));
-      cerr << "Adding flank sequence to search for: " << optarg << "\n";
+    case 'x': { // Fixed segment
+      Segment s;
+      s.type = FIXED;
+      s.pattern = optarg;
+      s.name = "Fixed_" + to_string(search_pattern.size());
+      search_pattern.push_back(s);
+      cerr << "Adding fixed sequence to search for: " << optarg << "\n";
       params += 2;
       break;
     }
-    case 'u': {
-      search_pattern.push_back(std::make_pair("UMI", optarg));
-      cerr << "Setting UMI to search for: " << optarg << "\n";
+    case 'u': { // Random (UMI) segment
+      Segment s;
+      s.type = RANDOM;
+      s.name = ""; // Will be set later if not provided
+      s.buffer_size = 0; // Default buffer for UMI
+
+      string arg_str(optarg);
+      size_t current_pos = 0;
+      size_t next_comma = arg_str.find(',');
+
+      // First part is always the pattern
+      s.pattern = arg_str.substr(current_pos, next_comma - current_pos);
+      cerr << "Setting UMI to search for: " << s.pattern;
+
+      while (next_comma != string::npos) {
+          current_pos = next_comma + 1;
+          next_comma = arg_str.find(',', current_pos);
+          string param = arg_str.substr(current_pos, next_comma - current_pos);
+
+          size_t colon_pos = param.find(':');
+          if (colon_pos == string::npos) {
+              cerr << "Error: Malformed -u parameter: " << param << "\n";
+              print_usage();
+              exit(1);
+          }
+          string key = param.substr(0, colon_pos);
+          string value = param.substr(colon_pos + 1);
+
+          if (key == "name") {
+              s.name = value;
+              cerr << " (name: " << s.name << ")";
+          } else if (key == "buffer") {
+              s.buffer_size = stoi(value);
+              cerr << " (buffer: " << s.buffer_size << ")";
+          } else {
+              cerr << "Error: Unknown -u parameter: " << key << "\n";
+              print_usage();
+              exit(1);
+          }
+      }
+      
+      // Assign default name if not provided
+      if (s.name.empty()) {
+          umi_count++;
+          if (umi_count == 1) {
+              s.name = "UB";
+          } else {
+              s.name = "UB" + to_string(umi_count);
+          }
+      } else {
+          umi_count++; // Still increment counter for user-named UMIs
+      }
+      
+      search_pattern.push_back(s);
+      cerr << " -> named: " << s.name << "\n";
       params += 2;
       break;
     }
-    case 'b': {
-      search_pattern.push_back(std::make_pair("BC", optarg));
-      cerr << "Setting barcode to search for: " << optarg << "\n";
+    case 'b': { // Old-style Barcode segment
+      Segment s;
+      s.type = MATCHED;
+      s.pattern = optarg;
+      barcode_count++;
+      s.name = (barcode_count == 1) ? "CB" : "CB" + to_string(barcode_count);
+      s.buffer_size = 5; // Default buffer for barcode
+      s.max_edit_distance = edit_distance; // Will use global -e
+      s.bc_list_name = "global"; // Will use global -k
+      search_pattern.push_back(s);
+      cerr << "Setting old-style barcode to search for: " << optarg 
+           << " -> named: " << s.name 
+           << ". Will use global barcode list (-k) and edit distance (-e).\n";
+      params += 2;
+      break;
+    }
+    case 'B': { // New-style Barcode segment
+      Segment s;
+      s.type = MATCHED;
+      s.name = ""; // Will be set later if not provided
+      s.buffer_size = 5; // Default buffer
+      s.max_edit_distance = edit_distance; // Default to global -e
+
+      string arg_str(optarg);
+      size_t current_pos = 0;
+      size_t next_comma = arg_str.find(',');
+
+      // First part is always the pattern
+      s.pattern = arg_str.substr(current_pos, next_comma - current_pos);
+      cerr << "Adding new-style barcode segment: " << s.pattern;
+
+      while (next_comma != string::npos) {
+          current_pos = next_comma + 1;
+          next_comma = arg_str.find(',', current_pos);
+          string param = arg_str.substr(current_pos, next_comma - current_pos);
+
+          size_t colon_pos = param.find(':');
+          if (colon_pos == string::npos) {
+              cerr << "Error: Malformed -B parameter: " << param << "\n";
+              print_usage();
+              exit(1);
+          }
+          string key = param.substr(0, colon_pos);
+          string value = param.substr(colon_pos + 1);
+
+          if (key == "name") {
+              s.name = value;
+              cerr << " (name: " << s.name << ")";
+          } else if (key == "list") {
+              s.bc_list_name = value;
+              individual_bclist_specified = true;
+              // Load barcode file
+              unordered_set<string> current_bclist;
+              file.open(value);
+              if (!(file.good())) {
+                  cerr << "Error: Unable to open barcode file: " << value << "\n";
+                  print_usage();
+                  exit(1);
+              }
+              while (getline(file, line)) {
+                  istringstream line_stream(line);
+                  string bc_entry;
+                  line_stream >> bc_entry;
+                  current_bclist.insert(bc_entry);
+              }
+              file.close();
+              if (current_bclist.empty()) {
+                  cerr << "Error: barcode file " << value << " is empty.\n";
+                  print_usage();
+                  exit(1);
+              }
+              known_barcodes_map[value] = current_bclist;
+              cerr << " (barcode list: " << value << ")";
+          } else if (key == "buffer") {
+              s.buffer_size = stoi(value);
+              cerr << " (buffer: " << s.buffer_size << ")";
+          } else if (key == "max_ed") {
+              s.max_edit_distance = stoi(value);
+              cerr << " (max_ed: " << s.max_edit_distance << ")";
+          } else {
+              cerr << "Error: Unknown -B parameter: " << key << "\n";
+              print_usage();
+              exit(1);
+          }
+      }
+      
+      // Assign default name if not provided
+      if (s.name.empty()) {
+          barcode_count++;
+          if (barcode_count == 1) {
+              s.name = "CB";
+          } else {
+              s.name = "CB" + to_string(barcode_count);
+          }
+      } else {
+          barcode_count++; // Still increment counter for user-named barcodes
+      }
+      
+      search_pattern.push_back(s);
+      cerr << " -> named: " << s.name << "\n";
       params += 2;
       break;
     }
@@ -808,12 +935,7 @@ int main(int argc, char **argv) {
       split_file_by_barcode = get_bool_opt_arg(optarg);
       cerr << "Split read output into separate files by barcode: "
            << split_file_by_barcode << "\n";
-      int max_split_bc = 50;
-      if (known_barcodes.size() > max_split_bc) {
-        cerr << "Too many barcodes to split into separate files: "
-             << known_barcodes.size() << "> " << max_split_bc << "\n";
-        split_file_by_barcode = false;
-      }
+      
       params += 2;
       break;
     }
@@ -840,15 +962,37 @@ int main(int argc, char **argv) {
       delete[] arg;
   }
 
-  // default case when no x, u, b is speficied
+  // default case when no x, u, b, B is speficied
   if (search_pattern.empty()) {
     cerr << "Using default search pattern: " << endl;
-    search_pattern = {{"primer", "CTACACGACGCTCTTCCGATCT"},
-                      {"BC", std::string(16, '?')},
-                      {"UMI", std::string(12, '?')},
-                      {"polyA", std::string(9, 'T')}};
-    for (auto const& i : search_pattern)
-      std::cerr << i.first << ": " << i.second << "\n";
+    Segment s_primer, s_bc, s_umi, s_polya;
+
+    s_primer.type = FIXED;
+    s_primer.pattern = "CTACACGACGCTCTTCCGATCT";
+    s_primer.name = "primer";
+    search_pattern.push_back(s_primer);
+
+    s_bc.type = MATCHED;
+    s_bc.pattern = std::string(16, '?');
+    s_bc.name = "CB";
+    s_bc.buffer_size = 5;
+    s_bc.max_edit_distance = edit_distance;
+    s_bc.bc_list_name = "global";
+    search_pattern.push_back(s_bc);
+
+    s_umi.type = RANDOM;
+    s_umi.pattern = std::string(12, '?');
+    s_umi.name = "UB";
+    s_umi.buffer_size = 0;
+    search_pattern.push_back(s_umi);
+
+    s_polya.type = FIXED;
+    s_polya.pattern = std::string(9, 'T');
+    s_polya.name = "polyA";
+    search_pattern.push_back(s_polya);
+
+    for (auto const& s : search_pattern)
+      std::cerr << s.name << ": " << s.pattern << "\n";
   }
 
   cerr << "For usage information type: flexiplex -h" << endl;
@@ -881,13 +1025,19 @@ int main(int argc, char **argv) {
   out_stat_filename = out_filename_prefix + "_" + out_stat_filename;
   out_bc_filename = out_filename_prefix + "_" + out_bc_filename;
 
-  if (known_barcodes.size() > 0) {
+  if (!known_barcodes_map.empty()) {
     if (file_exists(out_stat_filename)) {
       cerr << "File " << out_stat_filename
            << " already exists, overwriting." << endl;
     }
     out_stat_file.open(out_stat_filename, std::ios::trunc);
-    out_stat_file << "Read\tCellBarcode\tFlankEditDist\tBarcodeEditDist\tUMI\n";
+    out_stat_file << "Read";
+    for (const auto& s : search_pattern) {
+        if (s.type != FIXED) {
+            out_stat_file << "\t" << s.name;
+        }
+    }
+    out_stat_file << "\tFlankEditDist\n";
   }
 
   cerr << "Searching for barcodes...\n";
@@ -919,7 +1069,7 @@ int main(int argc, char **argv) {
 
   // Start worker threads
   for (int i = 0; i < n_threads; ++i) {
-      workers.emplace_back(search_worker, ref(work_queue), ref(results_queue), ref(known_barcodes),
+      workers.emplace_back(search_worker, ref(work_queue), ref(results_queue), ref(known_barcodes_map),
                            flank_edit_distance, edit_distance, ref(search_pattern));
   }
 
@@ -968,20 +1118,41 @@ int main(int argc, char **argv) {
       if (sr->count > 0) bc_count++;
       if (sr->chimeric) multi_bc_count++;
 
-      for (const auto& bc : sr->vec_bc_for) barcode_counts[bc.barcode]++;
-      for (const auto& bc : sr->vec_bc_rev) barcode_counts[bc.barcode]++;
+      // Count barcodes from features map (first MATCHED segment)
+      for (const auto& bc : sr->vec_bc_for) {
+          for (const auto& s : search_pattern) {
+              if (s.type == MATCHED) {
+                  auto it = bc.features.find(s.name);
+                  if (it != bc.features.end()) {
+                      barcode_counts[it->second]++;
+                      break; // Only count first barcode for statistics
+                  }
+              }
+          }
+      }
+      for (const auto& bc : sr->vec_bc_rev) {
+          for (const auto& s : search_pattern) {
+              if (s.type == MATCHED) {
+                  auto it = bc.features.find(s.name);
+                  if (it != bc.features.end()) {
+                      barcode_counts[it->second]++;
+                      break; // Only count first barcode for statistics
+                  }
+              }
+          }
+      }
 
-      if (known_barcodes.size() != 0) {
-          print_stats(sr->read_id, sr->vec_bc_for, out_stat_file);
-          print_stats(sr->read_id, sr->vec_bc_rev, out_stat_file);
+      if (known_barcodes_map.size() != 0) {
+          print_stats(sr->read_id, sr->vec_bc_for, out_stat_file, search_pattern);
+          print_stats(sr->read_id, sr->vec_bc_rev, out_stat_file, search_pattern);
 
           print_read(sr->read_id + "_+", sr->line, sr->qual_scores, sr->vec_bc_for, out_filename_prefix,
-                     split_file_by_barcode, barcode_file_streams, cout_mutex, file_mutex, remove_barcodes, print_chimeric && sr->chimeric);
+                     split_file_by_barcode, barcode_file_streams, cout_mutex, file_mutex, remove_barcodes, print_chimeric && sr->chimeric, search_pattern);
 
           if (remove_barcodes || sr->vec_bc_for.empty()) {
               reverse(sr->qual_scores.begin(), sr->qual_scores.end());
               print_read(sr->read_id + "_-", sr->rev_line, sr->qual_scores, sr->vec_bc_rev, out_filename_prefix,
-                         split_file_by_barcode, barcode_file_streams, cout_mutex, file_mutex, remove_barcodes, print_chimeric && sr->chimeric);
+                         split_file_by_barcode, barcode_file_streams, cout_mutex, file_mutex, remove_barcodes, print_chimeric && sr->chimeric, search_pattern);
           }
       }
       
@@ -996,7 +1167,7 @@ int main(int argc, char **argv) {
   }
 
   reads_ifs.close();
-  if (known_barcodes.size() > 0) {
+  if (known_barcodes_map.size() > 0) {
     out_stat_file.close();
   }
   // Close all the split files
@@ -1014,7 +1185,7 @@ int main(int argc, char **argv) {
   cerr << "All done!" << endl;
   cerr << "If you like Flexiplex, please cite us! https://doi.org/10.1093/bioinformatics/btae102" << endl;
 
-  if (known_barcodes.size() > 0) {
+  if (known_barcodes_map.size() > 0) {
     return (0);
   }
 
