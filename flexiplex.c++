@@ -311,7 +311,7 @@ Barcode extract_features(string & seq,
 
   //search for the concatenated pattern
   EdlibAlignResult result = edlibAlign(search_string_template.c_str(), search_string_template.length(), seq.c_str(), seq.length(), edlibConf);
-  if(result.status != EDLIB_STATUS_OK || result.numLocations==0 || result.editDistance == -1 ){
+  if(result.status != EDLIB_STATUS_OK || result.numLocations==0 ){
     edlibFreeAlignResult(result);
     return(barcode_result); // no match found - return
   } //fill in info about found primer and polyT location
@@ -352,69 +352,105 @@ Barcode extract_features(string & seq,
   }
   edlibFreeAlignResult(result);
 
-  // Extract and validate features for each segment
+  // Storage for refined positions from matched segments
+  std::vector<int> refined_segment_starts(segments.size(), -1);
+  std::vector<int> refined_segment_ends(segments.size(), -1);
+
+  // Pass 1: Process MATCHED segments
   for (size_t i = 0; i < segments.size(); ++i) {
     const Segment& s = segments[i];
+    if (s.type != MATCHED) continue;
+
     int segment_read_start = read_to_segment_starts[i];
     int segment_read_end = (i + 1 < read_to_segment_starts.size()) ? read_to_segment_starts[i+1] : barcode_result.flank_end;
-    int extracted_length = segment_read_end - segment_read_start;
 
-    if (extracted_length < 0) extracted_length = 0; // Should not happen with correct alignment
+    const unordered_set<string>* current_bclist = nullptr;
 
-    std::string extracted_seq = seq.substr(segment_read_start, extracted_length);
+    if (!s.bc_list_name.empty()) {
+        auto it = known_barcodes_map->find(s.bc_list_name);
+        if (it != known_barcodes_map->end()) {
+            current_bclist = &(it->second);
+        }
+    } else if (known_barcodes_map->count("global")) {
+        current_bclist = &(known_barcodes_map->at("global"));
+    }
 
-    if (s.type == MATCHED) {
-      const unordered_set<string>* current_bclist = nullptr;
+    if (current_bclist && !current_bclist->empty()) {
+      // Apply buffer for search
+      int search_start = max(0, segment_read_start - s.buffer_size);
+      int search_end = min((int)seq.length(), segment_read_end + s.buffer_size);
+      std::string search_region = seq.substr(search_start, search_end - search_start);
 
-      if (!s.bc_list_name.empty()) {
-          auto it = known_barcodes_map->find(s.bc_list_name);
-          if (it != known_barcodes_map->end()) {
-              current_bclist = &(it->second);
-          }
-      } else if (known_barcodes_map->count("global")) {
-          current_bclist = &(known_barcodes_map->at("global"));
-      }
+      unsigned int best_edit_distance = 100; // Higher than any reasonable max_ed
+      unsigned int best_end_distance = 0;
+      std::string best_barcode_match = "";
+      bool current_segment_unambiguous = false;
 
-      if (current_bclist && !current_bclist->empty()) {
-        // Apply buffer for search
-        int search_start = max(0, segment_read_start - s.buffer_size);
-        int search_end = min((int)seq.length(), segment_read_end + s.buffer_size);
-        std::string search_region = seq.substr(search_start, search_end - search_start);
+      for (const auto& known_bc : *current_bclist) {
+        unsigned int editDistance, endDistance;
+        editDistance = edit_distance(search_region, known_bc, endDistance, s.max_edit_distance);
 
-        unsigned int best_edit_distance = 100; // Higher than any reasonable max_ed
-        std::string best_barcode_match = "";
-        bool current_segment_unambiguous = false;
+        if (editDistance == best_edit_distance) {
+          current_segment_unambiguous = false;
+        } else if (editDistance < best_edit_distance && editDistance <= s.max_edit_distance) {
+          current_segment_unambiguous = true;
+          best_edit_distance = editDistance;
+          best_barcode_match = known_bc;
+          best_end_distance = endDistance;
 
-        for (const auto& known_bc : *current_bclist) {
-          unsigned int editDistance, endDistance;
-          editDistance = edit_distance(search_region, known_bc, endDistance, s.max_edit_distance);
-
-          if (editDistance == best_edit_distance) {
-            current_segment_unambiguous = false;
-          } else if (editDistance < best_edit_distance && editDistance <= s.max_edit_distance) {
-            current_segment_unambiguous = true;
-            best_edit_distance = editDistance;
-            best_barcode_match = known_bc;
+          // TODO: multiplex perfect match can exits due to the buffering around barcode segments
+          if (editDistance == 0) {
+            break; // perfect match found
           }
         }
-        if (best_edit_distance <= s.max_edit_distance && current_segment_unambiguous) {
-            barcode_result.features[s.name] = best_barcode_match;
-        } else {
-            barcode_result.found_all_matched_segments = false;
-        }
-      } else { // No allow list provided
-        cerr << "Error: No barcode list found for segment " << s.name << ".\n";
-        exit(1);
       }
-    } else if (s.type == RANDOM) {
-      int extract_start = max(0, segment_read_start);
-      int extract_end = min((int)seq.length(), segment_read_end);
-      extracted_seq = seq.substr(extract_start, extract_end - extract_start);
-      barcode_result.features[s.name] = extracted_seq;
-    } else if (s.type == FIXED) {
-      // For fixed segments, we just note their presence or can store the extracted sequence if needed
-      // For now, we don't store fixed segments in features map unless explicitly asked.
-      // barcode_result.features[s.name] = extracted_seq;
+      if (best_edit_distance <= s.max_edit_distance && current_segment_unambiguous) {
+          barcode_result.features[s.name] = best_barcode_match;
+          
+          // Refined positions
+          refined_segment_ends[i] = search_start + best_end_distance - 1;
+          // Approximate start based on match length (assuming not many indels)
+          refined_segment_starts[i] = refined_segment_ends[i] - best_barcode_match.length() + 1;
+      } else {
+          barcode_result.found_all_matched_segments = false;
+      }
+    } else { // No barcode list found
+      cerr << "Error: No barcode list found for segment " << s.name << ".\n";
+      exit(1);
+    }
+  }
+
+  if (!barcode_result.found_all_matched_segments) {
+    return(barcode_result); // return early if any matched segments failed
+  }
+
+  // Pass 2: Process RANDOM and other segments
+  for (size_t i = 0; i < segments.size(); ++i) {
+    const Segment& s = segments[i];
+    if (s.type == MATCHED) continue;
+
+    int extract_start = read_to_segment_starts[i];
+    int extract_end = (i + 1 < read_to_segment_starts.size()) ? read_to_segment_starts[i+1] : barcode_result.flank_end;
+
+    if (s.type == RANDOM) {
+        // Check if there is a MATCHED segment immediately before
+        if (i > 0 && segments[i-1].type == MATCHED && refined_segment_ends[i-1] != -1) {
+            extract_start = refined_segment_ends[i-1] + 1;
+            extract_end = extract_start + s.pattern.length();
+        } 
+        // Otherwise check if there is one immediately after
+        else if (i + 1 < segments.size() && segments[i+1].type == MATCHED && refined_segment_starts[i+1] != -1) {
+            extract_end = refined_segment_starts[i+1];
+            extract_start = extract_end - s.pattern.length();
+        }
+
+        int actual_extract_start = max(0, extract_start);
+        int actual_extract_end = min((int)seq.length(), extract_end);
+        
+        if (actual_extract_end < actual_extract_start) actual_extract_end = actual_extract_start;
+        
+        std::string extracted_seq = seq.substr(actual_extract_start, actual_extract_end - actual_extract_start);
+        barcode_result.features[s.name] = extracted_seq;
     }
   }
 
@@ -551,7 +587,18 @@ void print_read(const string& read_id, const string& read, string qual,
       }
 
       int read_start = vec_bc.at(b).flank_end + 1;
-      int read_length = read.length() - read_start;
+      // work out the start and end base in case multiple barcodes
+      int next_barcode_start = read.length();
+      for (int k = 0; k < vec_size; k++) {
+          if (b == k) continue;
+          if (vec_bc.at(k).flank_start >= read_start) {
+              if (vec_bc.at(k).flank_start < next_barcode_start) {
+                  next_barcode_start = vec_bc.at(k).flank_start;
+              }
+          }
+      }
+
+      int read_length = next_barcode_start - read_start;
 
       string qual_new = "";
       if (qual != "") {
