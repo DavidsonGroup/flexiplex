@@ -30,19 +30,26 @@ using namespace std;
 
 // Append .1 to version for dev code, remove for release
 // e.g. 1.00.1 (dev) goes to 1.01 (release)
-const static string VERSION="1.02.5";
+const static string VERSION="1.02.6";
 
-enum SegmentType { FIXED, MATCHED, RANDOM };
+enum SegmentType { FIXED, MATCHED, MATCHED_SPLIT, RANDOM };
 
 struct Segment {
     SegmentType type;
     std::string pattern;
     std::string name; // e.g., "BC1", "UMI", "Primer1"
     std::string bc_list_name; // Only for MATCHED, refers to a key in known_barcodes_map
-    int buffer_size;            // Only for MATCHED
-    int max_edit_distance;      // Only for MATCHED
+    int buffer_size;            // for MATCHED, MATCHED_SPLIT
+    int max_edit_distance;      // for MATCHED, MATCHED_SPLIT
 };
 
+struct BarcodeGroup {
+    std::string name;
+    int max_edit_distance;
+    std::vector<size_t> segment_indices;
+};
+
+// can have other properties
 struct PredefinedStruct {
   string description;
   string params;
@@ -93,15 +100,21 @@ void print_usage(){
 
   cerr << "  Specifying adaptor / barcode structure : \n";
   cerr << "     -x sequence Append flanking sequence to search for\n";
-  cerr << "     -b sequence Append the barcode pattern to search for (named CB by default)\n";
   cerr << "     -u sequence[,name:<name>] Append the UMI pattern to search for\n";
   cerr << "                 (named UB, UB2, UB3... by default if name not provided)\n";
-  cerr << "     -B sequence[,name:<name>][,list:<file>][,buffer:<size>][,max_ed:<dist>]\n";
+  cerr << "     -b sequence[,name:<name>][,list:<file>][,group:<name>][,buffer:<size>][,max_ed:<dist>]\n";
   cerr << "                 Append a barcode pattern with optional parameters\n";
   cerr << "                 - name: specify the name of the barcode segment (defaults to BC1, BC2...)\n";
   cerr << "                 - list: specify a file containing expected barcodes for this segment\n";
+  cerr << "                 - group: specify the group name for this segment\n";
+  cerr << "                   Barcodes in the same group will be treated as parts of a single barcode\n";
   cerr << "                 - buffer: number of bases to extend search region on either side (default 5)\n";
   cerr << "                 - max_ed: maximum edit distance for this segment (default is global -e value)\n";
+  cerr << "     -g name,list:<file>[,max_ed:<dist>]\n";
+  cerr << "                 Define a barcode group (multiple barcode segments joined together)\n";
+  cerr << "                 - name: unique name for the group\n";
+  cerr << "                 - list: specify a file containing expected barcodes for this group\n";
+  cerr << "                 - max_ed: maximum edit distance allowed for the entire group\n";
   cerr << "     When no search pattern x,b,u option is provided, the following default pattern is used: \n";
   cerr << "          primer: CTACACGACGCTCTTCCGATCT\n";
   cerr << "          barcode (CB): ????????????????\n";
@@ -271,6 +284,7 @@ unsigned int edit_distance(const std::string& s1, const std::string& s2, unsigne
 Barcode extract_features(string & seq,
 		    const std::vector<Segment> &segments,
 		    const std::unordered_map<std::string, std::unordered_set<std::string>> *known_barcodes_map,
+            const std::unordered_map<std::string, BarcodeGroup> *group_map,
 		    int global_flank_max_editd,
 		    int global_barcode_edit_distance) {
 
@@ -420,26 +434,195 @@ Barcode extract_features(string & seq,
     }
   }
 
+  // Pass 2: Process MATCHED_SPLIT segments
+  for (size_t i=0; i < segments.size(); ++i) {
+      if (segments[i].type != MATCHED_SPLIT) continue;
+      
+      // Using refined_segment_starts to track processed segments
+      // Should make a dedicated attribute in Segment for this?
+      if (refined_segment_starts[i] != -1) continue; // Already processed
+      
+      std::string group_name = segments[i].bc_list_name;
+
+      if (group_map->find(group_name) == group_map->end()) {
+           // Should be caught by validation before main loop
+           cerr << "Error: Undefined group " << group_name << ".\n";
+           exit(1); 
+      }
+      
+      const BarcodeGroup& bg = group_map->at(group_name);
+      
+      const std::vector<size_t>& split_group_indices = bg.segment_indices;
+
+      // Extract sequences for each part based on alignment
+      std::string concatenated_seq = "";
+      std::vector<std::string> part_seqs;
+      std::vector<int> part_starts;
+      std::vector<int> part_ends;
+      
+      bool possible_to_extract = true;
+      
+      for (size_t idx : split_group_indices) {
+          const Segment& s = segments[idx];
+          int segment_read_start = read_to_segment_starts[idx];
+          int segment_read_end = (idx + 1 < read_to_segment_starts.size()) ? read_to_segment_starts[idx+1] : barcode_result.flank_end;
+          
+          // Apply buffer 
+          int search_start = max(0, segment_read_start - s.buffer_size);
+          int search_end = min((int)seq.length(), segment_read_end + s.buffer_size);
+          
+          if (search_end <= search_start) {
+              possible_to_extract = false;
+              break;
+          }
+          
+          std::string part_seq = seq.substr(search_start, search_end - search_start);
+          part_seqs.push_back(part_seq);
+          part_starts.push_back(search_start);
+          part_ends.push_back(search_end);
+      }
+      
+      if (!possible_to_extract) {
+          barcode_result.found_all_matched_segments = false;
+           // If one fails, the whole group fails. Mark all as failed (which is default since refined.. is -1)
+          continue; 
+      }
+      
+      // Now perform matching against known barcodes for this group
+      // Each split have its own wiggle room (buffer)
+      // cannot just concatenate and compare
+      // Split the known barcodes by the expected lengths of each part
+      // and compare each part instead.
+      const unordered_set<string>* current_bclist = nullptr;
+       if (!segments[i].bc_list_name.empty()) {
+            auto it = known_barcodes_map->find(segments[i].bc_list_name);
+            if (it != known_barcodes_map->end()) {
+                current_bclist = &(it->second);
+            }
+        }
+        
+       if (current_bclist && !current_bclist->empty()) {
+           unsigned int best_edit_distance = 100;
+           int allowed_group_ed = bg.max_edit_distance;
+           std::string best_barcode_match = "";
+           // To store where each part matched to calculate refined positions
+           std::vector<int> best_part_starts_in_read(split_group_indices.size(), 0);
+           
+           bool current_group_unambiguous = false;
+           
+           // Calculate expected split points in the known barcode
+           std::vector<size_t> known_split_offsets;
+           size_t running_offset = 0;
+           for (size_t idx : split_group_indices) {
+               known_split_offsets.push_back(running_offset);
+               running_offset += segments[idx].pattern.length();
+           }
+           
+           for (const auto& known_bc : *current_bclist) {
+               // For this known_bc, split it into expected parts based on pattern lengths
+               
+               unsigned int total_edit_distance = 0;
+               std::vector<int> current_part_starts;
+               
+               bool possible_match = true;
+               
+               for (size_t k = 0; k < split_group_indices.size(); ++k) {
+                   // match each part to the corresponding buffer region.
+                   size_t idx = split_group_indices[k];
+                   int offset = known_split_offsets[k];
+                   int len = segments[idx].pattern.length();
+                   
+                   if (offset + len > known_bc.length()) {
+                       // The rest of the known_bc is shorter than expected
+                       // proceed if there is still some left for this split
+                       len = known_bc.length() - offset; 
+                   }
+                   if (len <= 0) {
+                      // Exceeded known barcode length already
+                      // nothing left for this split, quit
+                      total_edit_distance += 100;
+                      cerr << "Error: Known barcode shorter than expected split lengths.\n";
+                      cerr << "Nothing left to match for segment " << segments[idx].name << " in barcode " << known_bc << ".\n";
+                      exit(1);
+                   }
+                   
+                   std::string known_part = known_bc.substr(offset, len);
+                   unsigned int endDist;
+                   // Use part_seqs[k] which is the buffered region from read
+                   unsigned int part_ed = edit_distance(part_seqs[k], known_part, endDist, segments[idx].max_edit_distance);
+                   
+                   if (part_ed > segments[idx].max_edit_distance) {
+                       possible_match = false;
+                       break; 
+                   }
+                   total_edit_distance += part_ed;
+                   
+                   // Track positions for this potential match
+                   current_part_starts.push_back(part_starts[k] + endDist - known_part.length());
+               }
+               
+               if (possible_match) {
+                    if (total_edit_distance == best_edit_distance) {
+                        current_group_unambiguous = false;
+                    } else if (total_edit_distance < best_edit_distance) {
+                            current_group_unambiguous = true;
+                            best_edit_distance = total_edit_distance;
+                            best_barcode_match = known_bc;
+                            
+                            best_part_starts_in_read = current_part_starts;
+                        }
+               }
+           }
+           
+           if (best_edit_distance <= allowed_group_ed && current_group_unambiguous) {
+                // Assign results
+                size_t running_offset = 0;
+                for (size_t k = 0; k < split_group_indices.size(); ++k) {
+                    size_t idx = split_group_indices[k];
+                    // Name is unique per segment
+                    int len = segments[idx].pattern.length();
+                    // Just in case
+                     if (running_offset + len > best_barcode_match.length()) len = best_barcode_match.length() - running_offset;
+                    
+                    std::string part_match_str = best_barcode_match.substr(running_offset, len);
+                    barcode_result.features[segments[idx].name] = part_match_str;
+                    
+                    refined_segment_starts[idx] = best_part_starts_in_read[k];
+                    refined_segment_ends[idx] = best_part_starts_in_read[k] + len - 1;
+                    
+                    running_offset += segments[idx].pattern.length();
+                }
+                barcode_result.features[group_name] = best_barcode_match;
+           } else {
+               barcode_result.found_all_matched_segments = false;
+           }
+
+       } else {
+            cerr << "Error: No barcode list found for segment " << segments[i].name << ".\n";
+            exit(1);
+       }
+  }
+
   if (!barcode_result.found_all_matched_segments) {
     return(barcode_result); // return early if any matched segments failed
   }
 
-  // Pass 2: Process RANDOM and other segments
+  // Pass 3: Process RANDOM and other segments
   for (size_t i = 0; i < segments.size(); ++i) {
     const Segment& s = segments[i];
-    if (s.type == MATCHED) continue;
+    if (s.type == MATCHED || s.type == MATCHED_SPLIT) continue;
 
     int extract_start = read_to_segment_starts[i];
     int extract_end = (i + 1 < read_to_segment_starts.size()) ? read_to_segment_starts[i+1] : barcode_result.flank_end;
 
     if (s.type == RANDOM) {
         // Check if there is a MATCHED segment immediately before
-        if (i > 0 && segments[i-1].type == MATCHED && refined_segment_ends[i-1] != -1) {
+        if (i > 0 && (segments[i-1].type == MATCHED || segments[i-1].type == MATCHED_SPLIT) && refined_segment_ends[i-1] != -1) {
             extract_start = refined_segment_ends[i-1] + 1;
             extract_end = extract_start + s.pattern.length();
         } 
         // Otherwise check if there is one immediately after
-        else if (i + 1 < segments.size() && segments[i+1].type == MATCHED && refined_segment_starts[i+1] != -1) {
+        else if (i + 1 < segments.size() && (segments[i+1].type == MATCHED || segments[i+1].type == MATCHED_SPLIT) && refined_segment_starts[i+1] != -1) {
             extract_end = refined_segment_starts[i+1];
             extract_start = extract_end - s.pattern.length();
         }
@@ -459,6 +642,7 @@ Barcode extract_features(string & seq,
 
 vector<Barcode> big_barcode_search(const string & sequence,
                                    const std::unordered_map<std::string, std::unordered_set<std::string>> *known_barcodes_map,
+                                   const std::unordered_map<std::string, BarcodeGroup> *group_map,
                                    int global_flank_max_editd,
                                    int global_barcode_edit_distance,
                                    const std::vector<Segment> &segments) {
@@ -466,7 +650,7 @@ vector<Barcode> big_barcode_search(const string & sequence,
     string masked_sequence = sequence; // Work on a copy
 
     while (true) {
-        Barcode result = extract_features(masked_sequence, segments, known_barcodes_map, global_flank_max_editd, global_barcode_edit_distance);
+        Barcode result = extract_features(masked_sequence, segments, known_barcodes_map, group_map, global_flank_max_editd, global_barcode_edit_distance);
         if (result.flank_editd <= global_flank_max_editd && result.found_all_matched_segments) {
             return_vec.push_back(result);
 
@@ -543,7 +727,8 @@ void print_read(const string& read_id, const string& read, string qual,
         mutex & cout_mutex, mutex & file_mutex,
 		bool trim_barcodes,
     bool chimeric,
-    const std::vector<Segment> &segments){
+    const std::vector<Segment> &segments,
+    const std::unordered_map<std::string, BarcodeGroup> &group_map){
 
     auto vec_size = vec_bc.size();
 
@@ -556,6 +741,21 @@ void print_read(const string& read_id, const string& read, string qual,
 
       stringstream new_read_id_ss;
       string primary_barcode_for_filename = "";
+
+
+      // print the grouped barcodes as a whole first
+      for (const auto& group_pair : group_map) {
+          const string& group_name = group_pair.first;
+          auto it = vec_bc.at(b).features.find(group_name);
+          if (it != vec_bc.at(b).features.end()) {
+              new_read_id_ss << it->second << "_";
+              if (primary_barcode_for_filename.empty()) {
+                  primary_barcode_for_filename = it->second;
+              }
+          } else {
+              new_read_id_ss << "NA_";
+          }
+      }
 
       for (const auto& s : segments) {
           if (s.type != FIXED) {
@@ -576,6 +776,14 @@ void print_read(const string& read_id, const string& read, string qual,
       }
 
       string new_read_id = new_read_id_prefix + "#" + read_id + ss_id_suffix.str();
+
+      for (const auto& group_pair : group_map) {
+          const string& group_name = group_pair.first;
+          auto it = vec_bc.at(b).features.find(group_name);
+          if (it != vec_bc.at(b).features.end()) {
+              new_read_id += "\t" + group_name + ":Z:" + it->second;
+          }
+      }
 
       for (const auto& s : segments) {
           if (s.type != FIXED) {
@@ -641,6 +849,7 @@ void search_worker(
     ThreadSafeQueue<SearchResult*> &work_queue,
     ThreadSafeQueue<SearchResult*> &results_queue,
     const std::unordered_map<std::string, std::unordered_set<std::string>> &known_barcodes_map,
+    const std::unordered_map<std::string, BarcodeGroup> &group_map,
     int flank_edit_distance,
     int global_barcode_edit_distance,
     const std::vector<Segment> &search_pattern
@@ -648,14 +857,14 @@ void search_worker(
     SearchResult* sr_ptr;
     while (work_queue.pop(sr_ptr) && sr_ptr) {
         //forward search
-        sr_ptr->vec_bc_for = big_barcode_search(sr_ptr->line, &known_barcodes_map, flank_edit_distance, global_barcode_edit_distance, search_pattern);
+        sr_ptr->vec_bc_for = big_barcode_search(sr_ptr->line, &known_barcodes_map, &group_map, flank_edit_distance, global_barcode_edit_distance, search_pattern);
 
         // get reverse complement
         sr_ptr->rev_line = sr_ptr->line;
         reverse_complement(sr_ptr->rev_line);
 
         //Check the reverse complement of the read
-        sr_ptr->vec_bc_rev = big_barcode_search(sr_ptr->rev_line, &known_barcodes_map, flank_edit_distance, global_barcode_edit_distance, search_pattern);
+        sr_ptr->vec_bc_rev = big_barcode_search(sr_ptr->rev_line, &known_barcodes_map, &group_map, flank_edit_distance, global_barcode_edit_distance, search_pattern);
 
         sr_ptr->count = sr_ptr->vec_bc_for.size() + sr_ptr->vec_bc_rev.size();
         sr_ptr->chimeric = !sr_ptr->vec_bc_for.empty() && !sr_ptr->vec_bc_rev.empty();
@@ -671,6 +880,34 @@ void search_worker(
 bool file_exists(const std::string &filename) {
   std::ifstream infile(filename);
   return infile.good();
+}
+
+// Helper function to parse sub-options
+void parse_sub_options(const string& opt_string, string& primary, map<string, string>& options) {
+    size_t comma_pos = opt_string.find(',');
+    if (comma_pos == string::npos) {
+        primary = opt_string;
+        return;
+    }
+    primary = opt_string.substr(0, comma_pos);
+    
+    size_t start = comma_pos + 1;
+    while (start < opt_string.length()) {
+        comma_pos = opt_string.find(',', start);
+        string kv_pair;
+        if (comma_pos == string::npos) {
+            kv_pair = opt_string.substr(start);
+            start = opt_string.length();
+        } else {
+            kv_pair = opt_string.substr(start, comma_pos - start);
+            start = comma_pos + 1;
+        }
+
+        size_t colon_pos = kv_pair.find(':');
+        if (colon_pos != string::npos) {
+            options[kv_pair.substr(0, colon_pos)] = kv_pair.substr(colon_pos + 1);
+        }
+    }
 }
 
 // MAIN is here!!
@@ -697,9 +934,11 @@ int main(int argc, char **argv) {
 
   // Set of known barcodes (can be multiple, identified by name)
   std::unordered_map<std::string, std::unordered_set<std::string>> known_barcodes_map;
-  // Flag to track if any -B segment specified its own barcode list
-  bool individual_bclist_specified = false;
+  // Flag to track if any -b segment specified its own barcode list
 
+  // Map to store group settings
+  std::unordered_map<std::string, BarcodeGroup> group_map;
+  
   // Counters for automatic naming
   int barcode_count = 0;
   int umi_count = 0;
@@ -718,7 +957,7 @@ int main(int argc, char **argv) {
   
 
   while ((c = getopt(myArgs.size(), myArgs.data(),
-                     "d:k:i:b:u:x:e:f:n:s:hp:c:B:")) != EOF) {
+                     "d:k:i:b:u:x:e:f:n:s:hp:c:g:")) != EOF) {
     switch (c) {
     case 'd': { // d=predefined list of settings for various search/barcode schemes
       if (predefinedMap.find(optarg) == predefinedMap.end()) {
@@ -743,11 +982,9 @@ int main(int argc, char **argv) {
       break;
     }
     case 'k': { // k=list of known barcodes (global barcode list)
-      if (individual_bclist_specified) {
-        cerr << "Error: Cannot use -k when -B segments have specified their own barcode files.\n";
-        print_usage();
-        exit(1);
-      }
+      // If -g is used or -B with list is used, -k might be ambiguous or disallowed.
+      // Allow -k only if NO groups or explicit lists are ever defined to keep it simple.
+      
       string file_name(optarg);
       string bc;
       unordered_set<string> global_bclist;
@@ -809,54 +1046,27 @@ int main(int argc, char **argv) {
     case 'u': { // Random (UMI) segment
       Segment s;
       s.type = RANDOM;
-      s.name = ""; // Will be set later if not provided
-      s.buffer_size = 0; // Default buffer for UMI
-
-      string arg_str(optarg);
-      size_t current_pos = 0;
-      size_t next_comma = arg_str.find(',');
-
-      // First part is always the pattern
-      s.pattern = arg_str.substr(current_pos, next_comma - current_pos);
+      s.name = ""; 
+      s.buffer_size = 0; 
+      
+      map<string, string> options;
+      parse_sub_options(optarg, s.pattern, options);
       cerr << "Setting UMI to search for: " << s.pattern;
 
-      while (next_comma != string::npos) {
-          current_pos = next_comma + 1;
-          next_comma = arg_str.find(',', current_pos);
-          string param = arg_str.substr(current_pos, next_comma - current_pos);
-
-          size_t colon_pos = param.find(':');
-          if (colon_pos == string::npos) {
-              cerr << "Error: Malformed -u parameter: " << param << "\n";
-              print_usage();
-              exit(1);
-          }
-          string key = param.substr(0, colon_pos);
-          string value = param.substr(colon_pos + 1);
-
-          if (key == "name") {
-              s.name = value;
-              cerr << " (name: " << s.name << ")";
-          } else if (key == "buffer") {
-              s.buffer_size = stoi(value);
-              cerr << " (buffer: " << s.buffer_size << ")";
-          } else {
-              cerr << "Error: Unknown -u parameter: " << key << "\n";
-              print_usage();
-              exit(1);
-          }
+      if (options.count("name")) {
+         s.name = options["name"];
+         cerr << " (name: " << s.name << ")";
+      }
+      if (options.count("buffer")) {
+         s.buffer_size = stoi(options["buffer"]);
+         cerr << " (buffer: " << s.buffer_size << ")";
       }
       
-      // Assign default name if not provided
       if (s.name.empty()) {
           umi_count++;
-          if (umi_count == 1) {
-              s.name = "UB";
-          } else {
-              s.name = "UB" + to_string(umi_count);
-          }
+          s.name = (umi_count == 1) ? "UB" : "UB" + to_string(umi_count);
       } else {
-          umi_count++; // Still increment counter for user-named UMIs
+          umi_count++; 
       }
       
       search_pattern.push_back(s);
@@ -864,108 +1074,131 @@ int main(int argc, char **argv) {
       params += 2;
       break;
     }
-    case 'b': { // Old-style Barcode segment
+    case 'b': {
       Segment s;
-      s.type = MATCHED;
-      s.pattern = optarg;
-      barcode_count++;
-      s.name = (barcode_count == 1) ? "CB" : "CB" + to_string(barcode_count);
-      s.buffer_size = 5; // Default buffer for barcode
-      s.max_edit_distance = edit_distance; // Will use global -e
-      s.bc_list_name = "global"; // Will use global -k
-      search_pattern.push_back(s);
-      cerr << "Setting old-style barcode to search for: " << optarg 
-           << " -> named: " << s.name 
-           << ". Will use global barcode list (-k) and edit distance (-e).\n";
-      params += 2;
-      break;
-    }
-    case 'B': { // New-style Barcode segment
-      Segment s;
-      s.type = MATCHED;
-      s.name = ""; // Will be set later if not provided
-      s.buffer_size = 5; // Default buffer
-      s.max_edit_distance = edit_distance; // Default to global -e
-
-      string arg_str(optarg);
-      size_t current_pos = 0;
-      size_t next_comma = arg_str.find(',');
-
-      // First part is always the pattern
-      s.pattern = arg_str.substr(current_pos, next_comma - current_pos);
-      cerr << "Adding new-style barcode segment: " << s.pattern;
-
-      while (next_comma != string::npos) {
-          current_pos = next_comma + 1;
-          next_comma = arg_str.find(',', current_pos);
-          string param = arg_str.substr(current_pos, next_comma - current_pos);
-
-          size_t colon_pos = param.find(':');
-          if (colon_pos == string::npos) {
-              cerr << "Error: Malformed -B parameter: " << param << "\n";
-              print_usage();
-              exit(1);
-          }
-          string key = param.substr(0, colon_pos);
-          string value = param.substr(colon_pos + 1);
-
-          if (key == "name") {
-              s.name = value;
-              cerr << " (name: " << s.name << ")";
-          } else if (key == "list") {
-              s.bc_list_name = value;
-              individual_bclist_specified = true;
-              // Load barcode file
-              unordered_set<string> current_bclist;
-              file.open(value);
-              if (!(file.good())) {
-                  cerr << "Error: Unable to open barcode file: " << value << "\n";
-                  print_usage();
-                  exit(1);
-              }
-              while (getline(file, line)) {
-                  istringstream line_stream(line);
-                  string bc_entry;
-                  line_stream >> bc_entry;
-                  current_bclist.insert(bc_entry);
-              }
-              file.close();
-              if (current_bclist.empty()) {
-                  cerr << "Error: barcode file " << value << " is empty.\n";
-                  print_usage();
-                  exit(1);
-              }
-              known_barcodes_map[value] = current_bclist;
-              cerr << " (barcode list: " << value << ")";
-          } else if (key == "buffer") {
-              s.buffer_size = stoi(value);
-              cerr << " (buffer: " << s.buffer_size << ")";
-          } else if (key == "max_ed") {
-              s.max_edit_distance = stoi(value);
-              cerr << " (max_ed: " << s.max_edit_distance << ")";
-          } else {
-              cerr << "Error: Unknown -B parameter: " << key << "\n";
-              print_usage();
-              exit(1);
-          }
-      }
+      s.type = MATCHED; 
+      s.name = ""; 
+      s.buffer_size = 5; 
+      s.max_edit_distance = edit_distance; 
+      s.bc_list_name = "global"; 
       
-      // Assign default name if not provided
+      string group_name = "";
+      map<string, string> options;
+      parse_sub_options(optarg, s.pattern, options);
+      
+      cerr << "Adding barcode segment: " << s.pattern;
+      
+      if (options.count("name")) {
+          s.name = options["name"];
+          cerr << " (name: " << s.name << ")";
+      }
+      if (options.count("buffer")) {
+          s.buffer_size = stoi(options["buffer"]);
+          cerr << " (buffer: " << s.buffer_size << ")";
+      }
+      if (options.count("max_ed")) {
+          s.max_edit_distance = stoi(options["max_ed"]);
+          cerr << " (max_ed: " << s.max_edit_distance << ")";
+      }
+      if (options.count("group")) {
+          group_name = options["group"];
+          cerr << " (group: " << group_name << ")";
+      }
+      if (options.count("list")) {
+          string file_name = options["list"];
+          // Loading list logic
+          if (known_barcodes_map.find(file_name) == known_barcodes_map.end()) {
+             unordered_set<string> bclist;
+             ifstream bc_file(file_name);
+             if (bc_file.good()) {
+                  string bc_line, bc;
+                  while (getline(bc_file, bc_line)) {
+                     istringstream line_stream(bc_line);
+                     line_stream >> bc;
+                     bclist.insert(bc);
+                  }
+                  known_barcodes_map[file_name] = bclist;
+                  cerr << " (loaded " << bclist.size() << " barcodes from " << file_name << ")";
+             } else {
+                 cerr << "\nError: Could not open barcode list file: " << file_name << "\n";
+                 exit(1);
+             }
+          } else {
+              cerr << " (using loaded list " << file_name << ")";
+          }
+          s.bc_list_name = file_name;
+      }
+
       if (s.name.empty()) {
           barcode_count++;
-          if (barcode_count == 1) {
-              s.name = "CB";
-          } else {
-              s.name = "CB" + to_string(barcode_count);
-          }
+          s.name = (barcode_count == 1) ? "BC" : "BC" + to_string(barcode_count);
       } else {
-          barcode_count++; // Still increment counter for user-named barcodes
+         barcode_count++; 
+      }
+      
+      if (!group_name.empty()) {
+          if (options.count("list")) {
+               cerr << "\nError: Please specify the list file in the corresponding -g group definition if the segment is part of a group.\n";
+               exit(1);
+          }
+          s.bc_list_name = group_name;
+          s.type = MATCHED_SPLIT;
       }
       
       search_pattern.push_back(s);
       cerr << " -> named: " << s.name << "\n";
       params += 2;
       break;
+    }
+    case 'g': { // Define a group
+        BarcodeGroup bg;
+        bg.max_edit_distance = 2; 
+
+        string group_name_dummy;
+        map<string, string> options;
+        parse_sub_options(optarg, bg.name, options); // The primary value is the group name
+
+        cerr << "Defining group: " << bg.name;
+        
+        if (options.count("list")) {
+            string list_file = options["list"];
+            cerr << " (list: " << list_file << ")";
+            
+            // Re-using logic to load list, but here we store it under bg.name
+            if (known_barcodes_map.find(bg.name) != known_barcodes_map.end()) {
+                 cerr << "\nError: Group name " << bg.name << " already defined or used.\n";
+                 exit(1);
+            }
+            
+            unordered_set<string> bclist;
+            ifstream bc_file(list_file);
+            if (bc_file.good()) {
+                 string bc_line, bc;
+                 while (getline(bc_file, bc_line)) {
+                    istringstream line_stream(bc_line);
+                    line_stream >> bc;
+                    bclist.insert(bc);
+                 }
+                 known_barcodes_map[bg.name] = bclist;
+                 cerr << " (loaded " << bclist.size() << " barcodes)";
+            } else {
+                cerr << "\nError: Could not open barcode list file: " << list_file << "\n";
+                exit(1);
+            }
+        } else {
+            cerr << "\nError: Group definition must include 'list:filename'.\n";
+            exit(1);
+        }
+
+        if (options.count("max_ed")) {
+            bg.max_edit_distance = stoi(options["max_ed"]);
+            cerr << " (max_ed: " << bg.max_edit_distance << ")";
+        }
+        
+        group_map[bg.name] = bg;
+        cerr << "\n";
+        params += 2;
+        break;
     }
     case 'h': {
       print_usage();
@@ -1007,6 +1240,47 @@ int main(int argc, char **argv) {
   // free memory from -d option
   for (auto arg : allocated_args) {
       delete[] arg;
+  }
+  
+  // Validation and sanity checks
+  bool uses_global_list = false;
+  bool uses_explicit_list = false;
+  
+  if (known_barcodes_map.find("global") != known_barcodes_map.end()) {
+      uses_global_list = true;
+  }
+  
+  // Check what search patterns rely on
+  for (const auto& s : search_pattern) {
+      if (s.type == MATCHED || s.type == MATCHED_SPLIT) {
+          if (s.bc_list_name == "global") {
+               if (!uses_global_list) {
+                   // This segment needs global list but it's not provided
+                   // TODO: What to do with multiple -b segments and descovery mode?
+               }
+          } else {
+              uses_explicit_list = true;
+          }
+      }
+  }
+
+  if (uses_global_list && uses_explicit_list) {
+      cerr << "Error: You cannot use -k (global list) when -b or -g specifies explicit barcode lists.\n";
+      print_usage();
+      exit(1);
+  }
+
+  // Populate group segment indices
+  for (size_t i = 0; i < search_pattern.size(); ++i) {
+      if (search_pattern[i].type == MATCHED_SPLIT) {
+          string grp_name = search_pattern[i].bc_list_name;
+          if (group_map.find(grp_name) != group_map.end()) {
+              group_map[grp_name].segment_indices.push_back(i);
+          } else {
+              cerr << "Error: Barcode segment " << search_pattern[i].name << " refers to undefined group '" << grp_name << "'.\n";
+              exit(1);
+          }
+      }
   }
 
   // default case when no x, u, b, B is speficied
@@ -1060,6 +1334,7 @@ int main(int argc, char **argv) {
       print_usage();
       exit(1);
     }
+    cerr << "Reading reads from file " << reads_file << endl;
     in = &reads_ifs;
   }
 
@@ -1117,7 +1392,7 @@ int main(int argc, char **argv) {
   // Start worker threads
   for (int i = 0; i < n_threads; ++i) {
       workers.emplace_back(search_worker, ref(work_queue), ref(results_queue), ref(known_barcodes_map),
-                           flank_edit_distance, edit_distance, ref(search_pattern));
+                           ref(group_map), flank_edit_distance, edit_distance, ref(search_pattern));
   }
 
   // --- Producer Stage ---
@@ -1194,12 +1469,12 @@ int main(int argc, char **argv) {
           print_stats(sr->read_id, sr->vec_bc_rev, out_stat_file, search_pattern);
 
           print_read(sr->read_id + "_+", sr->line, sr->qual_scores, sr->vec_bc_for, out_filename_prefix,
-                     split_file_by_barcode, barcode_file_streams, cout_mutex, file_mutex, remove_barcodes, print_chimeric && sr->chimeric, search_pattern);
+                     split_file_by_barcode, barcode_file_streams, cout_mutex, file_mutex, remove_barcodes, print_chimeric && sr->chimeric, search_pattern, group_map);
 
           if (remove_barcodes || sr->vec_bc_for.empty()) {
               reverse(sr->qual_scores.begin(), sr->qual_scores.end());
               print_read(sr->read_id + "_-", sr->rev_line, sr->qual_scores, sr->vec_bc_rev, out_filename_prefix,
-                         split_file_by_barcode, barcode_file_streams, cout_mutex, file_mutex, remove_barcodes, print_chimeric && sr->chimeric, search_pattern);
+                         split_file_by_barcode, barcode_file_streams, cout_mutex, file_mutex, remove_barcodes, print_chimeric && sr->chimeric, search_pattern, group_map);
           }
       }
       
