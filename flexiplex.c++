@@ -539,11 +539,10 @@ void refine_split_segments(const string &seq,
             continue; 
         }
 
+        // Lookup group barcode list. If not present or empty, fall back to discovery mode.
         const unordered_set<string>* current_bclist = nullptr;
-        if (!segments[i].bc_list_name.empty()) {
-            auto it = known_barcodes_map->find(segments[i].bc_list_name);
-            if (it != known_barcodes_map->end()) current_bclist = &(it->second);
-        }
+        auto it = known_barcodes_map->find(group_name);
+        if (it != known_barcodes_map->end()) current_bclist = &(it->second);
         
         if (current_bclist && !current_bclist->empty()) {
             unsigned int best_edit_distance = 100;
@@ -609,7 +608,54 @@ void refine_split_segments(const string &seq,
                 barcode_result.found_all_matched_segments = false;
             }
         } else {
-            cerr << "Error: No barcode list found for segment " << segments[i].name << ".\n"; exit(1);
+            // Discovery mode for MATCHED_SPLIT:
+            // No known list for the group, so extract each part based on the approximate
+            // alignment-derived boundaries and concatenate to a group-level feature.
+            std::string group_concat;
+            group_concat.reserve(256);
+
+            for (size_t k = 0; k < split_group_indices.size(); ++k) {
+                size_t idx = split_group_indices[k];
+                const Segment& s = segments[idx];
+
+                int segment_read_start = read_to_segment_starts[idx];
+                int segment_read_end = (idx + 1 < read_to_segment_starts.size()) ? read_to_segment_starts[idx+1] : barcode_result.flank_end;
+
+                int extract_start = max(0, segment_read_start);
+                int extract_end = min((int)seq.length(), segment_read_end);
+
+                // Anchor left boundary to previous refined split-part if we have it.
+                if (k > 0) {
+                    size_t prev_idx = split_group_indices[k - 1];
+                    if (refined_segment_ends[prev_idx] != -1) {
+                        extract_start = max(extract_start, refined_segment_ends[prev_idx] + 1);
+                    }
+                }
+                // Anchor right boundary to next refined split-part if we have it.
+                if (k + 1 < split_group_indices.size()) {
+                    size_t next_idx = split_group_indices[k + 1];
+                    if (refined_segment_starts[next_idx] != -1) {
+                        extract_end = min(extract_end, refined_segment_starts[next_idx]);
+                    }
+                }
+
+                // If still unresolved, fall back to expected pattern length, starting at the approximate position.
+                if (extract_end <= extract_start) {
+                    extract_start = max(0, segment_read_start);
+                    extract_end = min((int)seq.length(), extract_start + (int)s.pattern.length());
+                }
+
+                if (extract_end < extract_start) extract_end = extract_start;
+
+                std::string part = seq.substr(extract_start, extract_end - extract_start);
+                barcode_result.features[s.name] = part;
+                refined_segment_starts[idx] = extract_start;
+                refined_segment_ends[idx] = extract_start + (int)part.length() - 1;
+
+                group_concat += part;
+            }
+
+            barcode_result.features[group_name] = group_concat;
         }
     }
 }
