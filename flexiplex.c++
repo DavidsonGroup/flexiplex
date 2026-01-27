@@ -223,16 +223,45 @@ struct SearchResult {
   bool chimeric = false;
 };
 
-// Forward declaration of search_worker after dependencies are defined
-void search_worker(
-    ThreadSafeQueue<SearchResult*> &work_queue,
-    ThreadSafeQueue<SearchResult*> &results_queue,
+// Forward declaration
+vector<Barcode> big_barcode_search(
+  const string &sequence,
+  const std::unordered_map<std::string, std::unordered_set<std::string>> *known_barcodes_map,
+  const std::unordered_map<std::string, BarcodeGroup> *group_map,
+  int global_flank_max_editd,
+  int global_barcode_edit_distance,
+  const std::vector<Segment> &segments);
+
+// Separated out from main so it can be run on batches in threads (deterministic output)
+static void search_read_batch(
+    std::vector<SearchResult> &reads,
     const std::unordered_map<std::string, std::unordered_set<std::string>> &known_barcodes_map,
     const std::unordered_map<std::string, BarcodeGroup> &group_map,
     int flank_edit_distance,
     int global_barcode_edit_distance,
-    const std::vector<Segment> &search_pattern
-);
+    const std::vector<Segment> &search_pattern) {
+
+  for (auto &sr : reads) {
+    // forward search
+    sr.vec_bc_for = big_barcode_search(sr.line, &known_barcodes_map, &group_map,
+                                      flank_edit_distance,
+                                      global_barcode_edit_distance,
+                                      search_pattern);
+
+    // reverse complement
+    sr.rev_line = sr.line;
+    reverse_complement(sr.rev_line);
+
+    // reverse search
+    sr.vec_bc_rev = big_barcode_search(sr.rev_line, &known_barcodes_map, &group_map,
+                                      flank_edit_distance,
+                                      global_barcode_edit_distance,
+                                      search_pattern);
+
+    sr.count = (int)sr.vec_bc_for.size() + (int)sr.vec_bc_rev.size();
+    sr.chimeric = !sr.vec_bc_for.empty() && !sr.vec_bc_rev.empty();
+  }
+}
 
 // Code for fast edit distance calculation for short sequences modified from
 // https://en.wikibooks.org/wiki/Algorithm_Implementation/Strings/Levenshtein_distance#C++
@@ -879,21 +908,38 @@ std::string compose_new_id(
   if (!id_prefix.empty() && id_prefix.back() == '_')
     id_prefix.pop_back();
 
-  std::string new_id = id_prefix + "#" + read_id + ss_suffix.str();
-
+  // Add CB tag (assume always present)
+  std::string new_id = id_prefix + "#" + read_id + ss_suffix.str() + "\t" + "CB:Z:";
+  std::string delim = "";
   for (const auto &g : group_map) {
     auto it = bc.features.find(g.first);
     if (it != bc.features.end()) {
-      new_id += "\t" + g.first + ":Z:" + it->second;
+      new_id += delim + g.first + ":" + it->second;
+      delim = ",";
     }
   }
   for (const auto &s : segments) {
-    if (s.type == FIXED)
+    if (s.type != MATCHED) 
       continue;
     auto it = bc.features.find(s.name);
     if (it != bc.features.end()) {
-      new_id += "\t" + s.name + ":Z:" + it->second;
+      new_id += delim + s.name + (s.name == "" ? "" : ":") + it->second;
+      delim = ",";
     }
+  }
+
+  // Add UB tag (if present, concatonate all UB segments if multiple present)
+  std::string ub;
+  for (const auto &s : segments) {
+    if (s.type != RANDOM)
+      continue;
+    auto it = bc.features.find(s.name);
+    if (it != bc.features.end()) {
+      ub += it->second;
+    }
+  }
+  if (!ub.empty()) {
+    new_id += "\tUB:Z:" + ub;
   }
 
   return new_id;
@@ -971,36 +1017,6 @@ void print_read(const string& read_id, const string& read,
   }
 }
 
-// The consumer thread function: searches for barcodes in a single read
-void search_worker(
-    ThreadSafeQueue<SearchResult*> &work_queue,
-    ThreadSafeQueue<SearchResult*> &results_queue,
-    const std::unordered_map<std::string, std::unordered_set<std::string>> &known_barcodes_map,
-    const std::unordered_map<std::string, BarcodeGroup> &group_map,
-    int flank_edit_distance,
-    int global_barcode_edit_distance,
-    const std::vector<Segment> &search_pattern
-) {
-    SearchResult* sr_ptr;
-    while (work_queue.pop(sr_ptr) && sr_ptr) {
-        //forward search
-        sr_ptr->vec_bc_for = big_barcode_search(sr_ptr->line, &known_barcodes_map, &group_map, flank_edit_distance, global_barcode_edit_distance, search_pattern);
-
-        // get reverse complement
-        sr_ptr->rev_line = sr_ptr->line;
-        reverse_complement(sr_ptr->rev_line);
-
-        //Check the reverse complement of the read
-        sr_ptr->vec_bc_rev = big_barcode_search(sr_ptr->rev_line, &known_barcodes_map, &group_map, flank_edit_distance, global_barcode_edit_distance, search_pattern);
-
-        sr_ptr->count = sr_ptr->vec_bc_for.size() + sr_ptr->vec_bc_rev.size();
-        sr_ptr->chimeric = !sr_ptr->vec_bc_for.empty() && !sr_ptr->vec_bc_rev.empty();
-
-        results_queue.push(sr_ptr);
-    }
-    // Push a sentinel to the results queue to signal this worker is done
-    results_queue.push(nullptr);
-}
 
 
 // check if file already exists
@@ -1259,7 +1275,7 @@ int main(int argc, char **argv) {
 
       if (s.name.empty()) {
           barcode_count++;
-          s.name = (barcode_count == 1) ? "BC" : "BC" + to_string(barcode_count);
+          s.name = (barcode_count == 1) ? "" : "BC" + to_string(barcode_count);
       } else {
          barcode_count++; 
       }
@@ -1484,7 +1500,7 @@ int main(int argc, char **argv) {
     out_stat_file << "Read";
     for (const auto& s : search_pattern) {
         if (s.type != FIXED) {
-            out_stat_file << "\t" << s.name;
+            out_stat_file << "\t" << (s.name.empty() ? "CB" : s.name);
         }
     }
     out_stat_file << "\tFlankEditDist\n";
@@ -1507,130 +1523,138 @@ int main(int argc, char **argv) {
       return 0;
   }
 
-  // --- Threading and Pipeline Setup ---
-  // Bound in-flight *work* to prevent unbounded RAM usage on large datasets.
-  // keep results_queue unbounded to avoid deadlocks when workers push
-  // their termination sentinels (nullptr) while the writer is waiting.
-  const size_t queue_capacity = 4096;
-  ThreadSafeQueue<SearchResult*> work_queue(queue_capacity);
-  ThreadSafeQueue<SearchResult*> results_queue; // unbounded
-  vector<thread> workers;
+  // --- Batch Threading ---
+  // Read input in fixed-size chunks, distribute chunks to threads,
+  // join threads, then write results in the same order as input.
 
-  // Mutexes for synchronized output
+  const int buffer_size = 2000; // reads per thread batch
+
+  // Mutexes for synchronized output (only needed for split files)
   mutex cout_mutex;
   mutex file_mutex;
   map<string, ofstream> barcode_file_streams;
 
-  // Start worker threads
-  for (int i = 0; i < n_threads; ++i) {
-      workers.emplace_back(search_worker, ref(work_queue), ref(results_queue), ref(known_barcodes_map),
-                           ref(group_map), flank_edit_distance, edit_distance, ref(search_pattern));
-  }
-
-  // --- Writer Stage (concurrent) ---
-  // Drain results and write output concurrently with the producer
-  thread writer_thread([&]() {
-      int finished_workers = 0;
-      while (finished_workers < n_threads) {
-          SearchResult* sr_ptr = nullptr;
-          results_queue.pop(sr_ptr);
-
-          if (sr_ptr == nullptr) {
-              finished_workers++;
-              continue;
-          }
-
-          unique_ptr<SearchResult> sr(sr_ptr); // Manage memory
-
-          r_count++;
-          if (sr->count > 0) bc_count++;
-          if (sr->chimeric) multi_bc_count++;
-
-          // Count barcodes from features map (first MATCHED segment)
-          for (const auto& bc : sr->vec_bc_for) {
-              for (const auto& s : search_pattern) {
-                  if (s.type == MATCHED) {
-                      auto it = bc.features.find(s.name);
-                      if (it != bc.features.end()) {
-                          barcode_counts[it->second]++;
-                          break; // Only count first barcode for statistics
-                      }
-                  }
-              }
-          }
-          for (const auto& bc : sr->vec_bc_rev) {
-              for (const auto& s : search_pattern) {
-                  if (s.type == MATCHED) {
-                      auto it = bc.features.find(s.name);
-                      if (it != bc.features.end()) {
-                          barcode_counts[it->second]++;
-                          break; // Only count first barcode for statistics
-                      }
-                  }
-              }
-          }
-
-          if (!known_barcodes_map.empty()) {
-              print_stats(sr->read_id, sr->vec_bc_for, out_stat_file, search_pattern);
-              print_stats(sr->read_id, sr->vec_bc_rev, out_stat_file, search_pattern);
-
-              print_read(sr->read_id + "_+", sr->line, sr->qual_scores, sr->vec_bc_for, out_filename_prefix,
-                         split_file_by_barcode, barcode_file_streams, cout_mutex, file_mutex,
-                         remove_barcodes, print_chimeric && sr->chimeric, search_pattern, group_map);
-
-              if (remove_barcodes || sr->vec_bc_for.empty()) {
-                  reverse(sr->qual_scores.begin(), sr->qual_scores.end());
-                  print_read(sr->read_id + "_-", sr->rev_line, sr->qual_scores, sr->vec_bc_rev, out_filename_prefix,
-                             split_file_by_barcode, barcode_file_streams, cout_mutex, file_mutex,
-                             remove_barcodes, print_chimeric && sr->chimeric, search_pattern, group_map);
-              }
-          }
-
-          if ((r_count < 100000 && r_count % 10000 == 0) || (r_count % 100000 == 0)) {
-              cerr << r_count / 1000000.0 << " million reads processed.." << endl;
-          }
-      }
-  });
-
-  // --- Producer Stage ---
-  // The main thread reads the file and pushes work to the queue
-  do {
-    SearchResult *sr = new SearchResult();
-    istringstream line_stream(read_id_line);
-    line_stream >> sr->read_id;
-    sr->read_id.erase(0, 1);
-
-    if (!is_fastq) { // fasta (account for multi-lines per read)
-        string buffer_string;
-        while (getline(*in, buffer_string) && buffer_string[0] != '>')
-            sr->line += buffer_string;
-        read_id_line = buffer_string;
-    } else { // fastq (get quality scores)
-        getline(*in, sr->line);
-        getline(*in, line); // skip '+' line
-        getline(*in, sr->qual_scores);
-        getline(*in, read_id_line);
+  while (*in) {
+    std::vector<std::vector<SearchResult>> sr_v(n_threads);
+    for (int t = 0; t < n_threads; ++t) {
+      sr_v[t] = std::vector<SearchResult>();
+      sr_v[t].reserve(buffer_size);
     }
-    work_queue.push(sr);
-  } while (*in);
 
-  // Push sentinels to the work queue to signal completion
-  for (int i = 0; i < n_threads; ++i) {
-      work_queue.push(nullptr);
+    // Fill per-thread batches in order
+    bool any_reads = false;
+    for (int t = 0; t < n_threads; ++t) {
+      for (int b = 0; b < buffer_size; ++b) {
+        if (!*in) break;
+        if (read_id_line.empty()) break;
+        if (read_id_line[0] != '@' && read_id_line[0] != '>') {
+          // tolerate trailing blank lines
+          break;
+        }
+
+        SearchResult sr;
+        istringstream line_stream(read_id_line);
+        line_stream >> sr.read_id;
+        if (!sr.read_id.empty()) sr.read_id.erase(0, 1);
+
+        if (!is_fastq) { // fasta (account for multi-lines per read)
+          string buffer_string;
+          while (getline(*in, buffer_string) && !buffer_string.empty() && buffer_string[0] != '>') {
+            sr.line += buffer_string;
+          }
+          read_id_line = buffer_string;
+        } else { // fastq
+          if (!getline(*in, sr.line)) {
+            read_id_line.clear();
+            break;
+          }
+          getline(*in, line); // skip '+' line
+          getline(*in, sr.qual_scores);
+          getline(*in, read_id_line);
+        }
+
+        sr_v[t].push_back(std::move(sr));
+        any_reads = true;
+      }
+
+      // Stop allocating further thread batches if input exhausted
+      if (!*in || read_id_line.empty()) {
+        for (int t2 = t + 1; t2 < n_threads; ++t2) sr_v[t2].clear();
+        break;
+      }
+    }
+
+    if (!any_reads) break;
+
+    // Launch threads to process each batch
+    std::vector<std::thread> threads;
+    threads.reserve(n_threads);
+    for (int t = 0; t < n_threads; ++t) {
+      if (sr_v[t].empty()) continue;
+      threads.emplace_back(search_read_batch, ref(sr_v[t]), ref(known_barcodes_map), ref(group_map),
+                           flank_edit_distance, edit_distance, ref(search_pattern));
+    }
+
+    // Join all threads
+    for (auto &th : threads) th.join();
+
+    // Write results in deterministic order: t then r (matches fill order above)
+    for (int t = 0; t < (int)sr_v.size(); ++t) {
+      for (int r = 0; r < (int)sr_v[t].size(); ++r) {
+        SearchResult &sr = sr_v[t][r];
+
+        r_count++;
+        if (sr.count > 0) bc_count++;
+        if (sr.chimeric) multi_bc_count++;
+
+        // Count barcodes from features map (first MATCHED segment)
+        for (const auto& bc : sr.vec_bc_for) {
+          for (const auto& s : search_pattern) {
+            if (s.type == MATCHED) {
+              auto it = bc.features.find(s.name);
+              if (it != bc.features.end()) {
+                barcode_counts[it->second]++;
+                break;
+              }
+            }
+          }
+        }
+        for (const auto& bc : sr.vec_bc_rev) {
+          for (const auto& s : search_pattern) {
+            if (s.type == MATCHED) {
+              auto it = bc.features.find(s.name);
+              if (it != bc.features.end()) {
+                barcode_counts[it->second]++;
+                break;
+              }
+            }
+          }
+        }
+
+        if (!known_barcodes_map.empty()) {
+          print_stats(sr.read_id, sr.vec_bc_for, out_stat_file, search_pattern);
+          print_stats(sr.read_id, sr.vec_bc_rev, out_stat_file, search_pattern);
+
+          print_read(sr.read_id + "_+", sr.line, sr.qual_scores, sr.vec_bc_for, out_filename_prefix,
+                     split_file_by_barcode, barcode_file_streams, cout_mutex, file_mutex,
+                     remove_barcodes, print_chimeric && sr.chimeric, search_pattern, group_map);
+
+          if (remove_barcodes || sr.vec_bc_for.empty()) {
+            string rev_qual = sr.qual_scores;
+            reverse(rev_qual.begin(), rev_qual.end());
+            print_read(sr.read_id + "_-", sr.rev_line, rev_qual, sr.vec_bc_rev, out_filename_prefix,
+                       split_file_by_barcode, barcode_file_streams, cout_mutex, file_mutex,
+                       remove_barcodes, print_chimeric && sr.chimeric, search_pattern, group_map);
+          }
+        }
+
+        if ((r_count < 100000 && r_count % 10000 == 0) || (r_count % 100000 == 0)) {
+          cerr << r_count / 1000000.0 << " million reads processed.." << endl;
+        }
+      }
+    }
   }
 
-  // Join all worker threads
-  for (auto& t : workers) {
-      t.join();
-  }
-
-  // Wait for the writer thread to drain all results (including worker sentinels)
-  writer_thread.join();
-
-  reads_ifs.close();
-  if (known_barcodes_map.size() > 0) {
-    out_stat_file.close();
-  }
   // Close all the split files
   for (auto& pair : barcode_file_streams) {
       if (pair.second.is_open()) {
