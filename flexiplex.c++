@@ -507,20 +507,38 @@ void refine_matched_segments(const string &seq,
       unsigned int best_edit_distance = 100;
       unsigned int best_end_distance = 0;
       std::string best_barcode_match = "";
+      int best_wiggle_offset = std::numeric_limits<int>::max(); // Initialize with a large value
       bool current_segment_unambiguous = false;
 
       for (const auto& known_bc : *current_bclist) {
         unsigned int editDistance, endDistance;
         editDistance = edit_distance(search_region, known_bc, endDistance, s.max_edit_distance);
 
-        if (editDistance == best_edit_distance) {
-          current_segment_unambiguous = false;
-        } else if (editDistance < best_edit_distance && editDistance <= s.max_edit_distance) {
-          current_segment_unambiguous = true;
-          best_edit_distance = editDistance;
-          best_barcode_match = known_bc;
-          best_end_distance = endDistance;
-          if (editDistance == 0) break; 
+        if (editDistance <= s.max_edit_distance) { // Only consider valid matches
+            // Calculate the start of the barcode in the original sequence
+            int current_match_start_in_seq = search_start + (endDistance - known_bc.length());
+            // Calculate the wiggle offset from the ideal segment_read_start
+            int current_wiggle_offset = std::abs(current_match_start_in_seq - segment_read_start);
+
+            if (editDistance < best_edit_distance) {
+                current_segment_unambiguous = true;
+                best_edit_distance = editDistance;
+                best_barcode_match = known_bc;
+                best_end_distance = endDistance;
+                best_wiggle_offset = current_wiggle_offset;
+                if (editDistance == 0 && current_wiggle_offset == 0) break; // Exact match, no wiggle
+            } else if (editDistance == best_edit_distance) {
+                if (current_wiggle_offset < best_wiggle_offset) {
+                    current_segment_unambiguous = true; // Found a better wiggle
+                    best_edit_distance = editDistance; // Keep same edit distance
+                    best_barcode_match = known_bc;
+                    best_end_distance = endDistance;
+                    best_wiggle_offset = current_wiggle_offset;
+                } else if (current_wiggle_offset == best_wiggle_offset) {
+                    current_segment_unambiguous = false; // Ambiguous if same edit distance and wiggle
+                }
+                // If current_wiggle_offset > best_wiggle_offset, do nothing, keep existing best
+            }
         }
       }
       if (best_edit_distance <= s.max_edit_distance && current_segment_unambiguous) {
@@ -608,6 +626,7 @@ void refine_split_segments(const string &seq,
       unsigned int best_edit_distance = 100;
       std::string best_barcode_match = "";
       std::vector<int> best_part_starts_in_read(split_group_indices.size(), 0);
+      unsigned int best_total_wiggle_offset = std::numeric_limits<unsigned int>::max(); // Initialize with a large value
       bool current_group_unambiguous = false;
 
       std::vector<size_t> known_split_offsets;
@@ -652,13 +671,29 @@ void refine_split_segments(const string &seq,
         if (!possible_match)
           continue;
 
-        if (total_edit_distance == best_edit_distance) {
-          current_group_unambiguous = false;
-        } else if (total_edit_distance < best_edit_distance) {
+        // Calculate current_total_wiggle_offset for the grouped barcode
+        unsigned int current_total_wiggle_offset = 0;
+        for (size_t k = 0; k < split_group_indices.size(); ++k) {
+            const size_t idx = split_group_indices[k];
+            current_total_wiggle_offset += std::abs(current_part_starts[k] - read_to_segment_starts[idx]);
+        }
+
+        if (total_edit_distance < best_edit_distance) {
           current_group_unambiguous = true;
           best_edit_distance = total_edit_distance;
           best_barcode_match = known_bc;
           best_part_starts_in_read = current_part_starts;
+          best_total_wiggle_offset = current_total_wiggle_offset;
+        } else if (total_edit_distance == best_edit_distance) {
+            if (current_total_wiggle_offset < best_total_wiggle_offset) {
+                current_group_unambiguous = true;
+                best_edit_distance = total_edit_distance;
+                best_barcode_match = known_bc;
+                best_part_starts_in_read = current_part_starts;
+                best_total_wiggle_offset = current_total_wiggle_offset;
+            } else if (current_total_wiggle_offset == best_total_wiggle_offset) {
+                current_group_unambiguous = false;
+            }
         }
       }
 
