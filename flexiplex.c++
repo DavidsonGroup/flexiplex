@@ -25,7 +25,7 @@ using namespace std;
 
 // Append .1 to version for dev code, remove for release
 // e.g. 1.00.1 (dev) goes to 1.01 (release)
-const static string VERSION="1.02.5";
+const static string VERSION="1.02.6";
 
 struct PredefinedStruct {
   string description;
@@ -43,7 +43,7 @@ static const map< string, PredefinedStruct> predefinedMap = {
   {"10x5v2",{"10x version 2 chemistry 5'",
 	     "-x CTACACGACGCTCTTCCGATCT -b ???????????????? -u ?????????? -x TTTCTTATATGGG -f 8 -e 2"}},
   {"grep",{"Simple grep-like search (edit distance up to 2)",
-	   "-f 2 -k ? -b \'\' -u \'\' -i false"}}
+	   "-f 2 -k ? -b \'\' -u \'\' -l false -r false"}}
 };
 
 // the help information which is printed when a user puts in the wrong
@@ -58,9 +58,9 @@ void print_usage(){
   cerr << "                     one row per barcode, or 2) a comma separate string of barcodes.\n";
   cerr << "                     Without this option, flexiplex will search and report possible barcodes.\n";
   cerr << "                     The generated list can be used for known_list in subsequent runs.\n";
-  cerr << "     -i true/false   Replace read ID with barcodes+UMI, remove search strings\n";
-  cerr << "                     including flanking sequenence and split read if multiple\n";
-  cerr << "                     barcodes found (default: true).\n";
+  cerr << "     -l true/false   Replace read ID with barcodes+UMI (default: true)\n"; 
+  cerr << "     -r true/false   Remove search strings including flanking sequenence and split read\n";
+  cerr << "                     if multiple barcodes found (default: true).\n";
   cerr << "     -s true/false   Sort reads into separate files by barcode (default: false)\n";
   cerr << "     -c true/false   Add a _C suffix to the read identifier of any chimeric reads\n";
   cerr << "                     (default: false). For instance if,\n";
@@ -509,6 +509,7 @@ void print_line(string id, string read, string quals, bool is_fastq, ostream & o
 void print_read(string read_id, string read, string qual,
 		vector<Barcode> & vec_bc, string prefix,
 		bool split, unordered_set<string> & found_barcodes,
+		bool change_id,
 		bool trim_barcodes,
     bool chimeric, bool is_fastq){
 
@@ -550,8 +551,10 @@ void print_read(string read_id, string read, string qual,
       }
       string read_new = read.substr(read_start, read_length);
 
-      if (b == 0 && !trim_barcodes) { // override if read shouldn't be cut
+      if(b == 0 && !change_id){ // if the read IDs shouldn't be updated with barcode and UMI
         new_read_id = read_id;
+      }
+      if(b == 0 && !trim_barcodes){ // override if read shouldn't be cut
         read_new = read;
         qual_new = qual;
         b = vec_size; // force loop to exit after this iteration
@@ -646,6 +649,7 @@ int main(int argc, char **argv) {
   string out_filename_prefix = "flexiplex"; //(n)
 
   bool split_file_by_barcode = false; //(s)
+  bool add_barcode_to_id = true;      //(l)
   bool remove_barcodes = true;        //(r)
   bool print_chimeric = false;        //(c)
 
@@ -667,7 +671,7 @@ int main(int argc, char **argv) {
   vector<char *> myArgs(argv, argv + argc);
 
   while ((c = getopt(myArgs.size(), myArgs.data(),
-                     "d:k:i:b:u:x:e:f:n:s:hp:c:")) != EOF) {
+                     "d:k:l:r:b:u:x:e:f:n:s:hp:c:")) != EOF) {
     switch (c) {
     case 'd': { // d=predefined list of settings for various search/barcode
                 // schemes
@@ -721,21 +725,27 @@ int main(int argc, char **argv) {
       params += 2;
       break;
     }
-    case 'i': {
+    case 'l': {
+      add_barcode_to_id = get_bool_opt_arg(optarg);
+      cerr << "Setting read IDs to be updated with barcode: " << add_barcode_to_id << "\n";
+      params += 2;
+      break;
+    }
+    case 'r': {
       remove_barcodes = get_bool_opt_arg(optarg);
-      cerr << "Setting read IDs to be replaced: " << remove_barcodes << "\n";
+      cerr << "Setting barcode trimming and read splitting to: " << remove_barcodes << "\n";
       params += 2;
       break;
     }
     case 'e': {
       edit_distance = atoi(optarg);
-      cerr << "Setting max barcode edit distance to " << edit_distance << "\n";
+      cerr << "Setting max barcode edit distance to: " << edit_distance << "\n";
       params += 2;
       break;
     }
     case 'f': {
       flank_edit_distance = atoi(optarg);
-      cerr << "Setting max flanking sequence edit distance to "
+      cerr << "Setting max flanking sequence edit distance to: "
            << flank_edit_distance << "\n";
       params += 2;
       break;
@@ -971,6 +981,7 @@ int main(int argc, char **argv) {
             out_filename_prefix,
             split_file_by_barcode,
             found_barcodes,
+	    add_barcode_to_id,
             remove_barcodes,
             print_chimeric && sr_v[t][r].chimeric, // include chimeric information if requested
             is_fastq
@@ -989,6 +1000,7 @@ int main(int argc, char **argv) {
               out_filename_prefix,
               split_file_by_barcode,
               found_barcodes,
+	      add_barcode_to_id,
               remove_barcodes,
               print_chimeric && sr_v[t][r].chimeric, // include chimeric information if requested
               is_fastq
