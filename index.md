@@ -186,7 +186,7 @@ O. Cheng et al., Flexiplex: a versatile demultiplexer and search tool for omics 
 
 # Examples of use
 
-## **NEW** Full long-read single-cell RNA-Seq tutorial
+## Full long-read single-cell RNA-Seq tutorial
 Now available at https://davidsongroup.github.io/flexiplex/tutorial.html, which shows how flexiplex can be used in combination with other tools to go from a fastq file to cleaned and deduplicated UMI count matrix.
 
 ## Assigning long reads to 10x barcodes (when barcodes are known)
@@ -288,7 +288,9 @@ Here -u and -b give a pattern of the expected UMI and barcode sequence, in this 
 
 Some barcoding schemes, such as visiumHD 3', split-seq, pip-seq etc, embed multiple barcodes at either or both ends of a read. These are often (but not always) accompanied by short spacer sequences and a UMI. Barcoding structures like this are best handled with multiple runs of flexiplex - where each run searches for one the barcodes and adds it into the read header. Since flexiplex can read and write fastq format from standard IO, these multiple searches can achieved in a single command line using pipes e.g.:
 
+```
 flexiplex [options to find BC1 + UMI] | flexiplex [options to find BC2] | flexiplex [options to find BC3] > final_out.fastq
+```
 The read IDs in the final output will then have the following structure:
 @BC3_#BC2_#BC1_UMI#originalID
 
@@ -297,10 +299,12 @@ To improve the identification of the barcode region, all flexiplex runs prior to
 As a concrete example. Imgaine we have a barcode structure like this:
 [UMI][ACA][BC1][TCTCTC][BC2][GTGTGT][BC3][TTTTTTTTTT][cDNA], where the UMI and barcodes are all 8bp long. We could demultiplex with:
 
+```
 cat raw_reads.fastq |
 flexiplex -u "????????" -x "ACA" -b "????????" -x "TCTCTC????????GTGTGT????????TTTTTTTTTT" -k barcodes.txt -r false |
 flexiplex -x "ACA????????TCTCTC" -b "????????" -x "GTGTGT????????TTTTTTTTTT" -k barcodes.txt -r false |
 flexiplex -x "ACA????????TCTCTC????????GTGTGT" -b "????????" -x "TTTTTTTTTT" -k barcodes.txt -r true > final_out.fastq
+```
 
 The edit distances for the flank sequence (-f) and barcode (-e) may need to be adjusted for the search length and number of barcodes. e.g. -e 1 would be reasonable when the barcodes are 8 bp long and there are ~1000 of them.
 
