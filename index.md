@@ -318,7 +318,7 @@ Note, the the order of the -x and -d matter here. The search sequence needs to b
 
 Alternatively, the search sequence can be split so that a subsequence has a lower error tolerance e.g.:
 ```
-flexiplex -i false -x "CACTCTTGCC" -k "TACGC" -b "TACGC" -x "CACTAGC" -f 3 -e 0 reads.fasta
+flexiplex -r false false -x "CACTCTTGCC" -k "TACGC" -b "TACGC" -x "CACTAGC" -f 3 -e 0 reads.fasta
 ```
 Here, we have defined that a perfect match (-e 0) is required for the middle (barcode) sequence, TACGC. Whereas the sequence surrounding this: CACTCTTGCC?????CACTAGC can have up to 3 mismatches/indels (-f 3). This is particularly useful for error tolerance searching of SNPs, as the alternative allele and can excluded through the requirement of a perfect match for the sequence at the variant.
 
@@ -327,7 +327,7 @@ Here, we have defined that a perfect match (-e 0) is required for the middle (ba
 An alternative on the simple search above, is to allow multiple alleles to be searched for e.g. to search for the KRAS variant c.34G>A run:
 
 ```
-flexiplex -i false -x "GTATCGTCAAGGCACTCTTGCCTACGC" -b "CAC?AGC" -k "CACTAGC,CACCAGC" -x "TCCAACTACCACAAGTTTATATTCAGT" -e 0 -f 15 reads.fasta > kras_var_reads.fasta
+flexiplex -r false -x "GTATCGTCAAGGCACTCTTGCCTACGC" -b "CAC?AGC" -k "CACTAGC,CACCAGC" -x "TCCAACTACCACAAGTTTATATTCAGT" -e 0 -f 15 reads.fasta > kras_var_reads.fasta
 ```
 
 Where -k here lists the mutant and wild type variants (reverse complimented), with a few bp either side, -x are the adjacent sequence left and right of these respectively and -b gives the pattern of the barcode, which may include wildcards ('?').
@@ -336,7 +336,7 @@ Where -k here lists the mutant and wild type variants (reverse complimented), wi
 
 Searching/genotyping and demultiplexing can be chained together. e.g. assign cellular barcodes then search for a specific mutation:
 ```
-flexiplex -d <chemistry> -k barcode_list.txt reads.fasta | flexiplex -n barcode_mutation_mapping -i false -x "GTATCGTCAAGGCACTCTTGCCTACGC" -k "CACTAGC,CACCAGC" -b "CAC?AGC" -x "TCCAACTACCACAAGTTTATATTCAGT" -e 0 -f 15 -u "" reads.fasta > kras_var_reads_with_barcodes.fasta
+flexiplex -d <chemistry> -k barcode_list.txt reads.fasta | flexiplex -n barcode_mutation_mapping -r false -x "GTATCGTCAAGGCACTCTTGCCTACGC" -k "CACTAGC,CACCAGC" -b "CAC?AGC" -x "TCCAACTACCACAAGTTTATATTCAGT" -e 0 -f 15 -u "" reads.fasta > kras_var_reads_with_barcodes.fasta
 ```
 
 ## Assigning genotype to cells - short reads
