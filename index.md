@@ -4,10 +4,11 @@
 - [Installing flexiplex](#installing-flexiplex)
 - [Usage](#usage)
 - [Examples of use](#examples-of-use)
-   - [**NEW** Full long-read single-cell RNA-Seq tutorial](https://davidsongroup.github.io/flexiplex/tutorial.html)
+   - [**Full long-read single-cell RNA-Seq tutorial**](https://davidsongroup.github.io/flexiplex/tutorial.html)
    - [Assigning long reads to 10x barcodes (when barcodes are known)](#assigning-long-reads-to-10x-barcodes-when-barcodes-are-known)
    - [Assigning long reads to 10x barcodes (when barcodes are unknown)](#assigning-long-reads-to-10x-barcodes-when-barcodes-are-unknown)
    - [Demultiplexing other read data by barcode](#demultiplexing-other-read-data-by-barcode)
+   - [**NEW** Demutiplexing multiple barcodes](#demutiplexing-multiple-barcodes)
    - [Assigning genotype to cells - long reads](#genotyping-cells---long-reads)
    - [Assigning genotype to cells - short reads](#assigning-genotype-to-cells---short-reads)
    - [Simple search](#simple-search)
@@ -123,7 +124,7 @@ To see usage information, run
 # Usage
 
 ```
-FLEXIPLEX 1.02.5
+FLEXIPLEX 1.02.6
 usage: flexiplex [options] [reads_input]
 
   reads_input: a .fastq or .fasta file. Will read from stdin if empty.
@@ -133,9 +134,9 @@ usage: flexiplex [options] [reads_input]
                      one row per barcode, or 2) a comma separate string of barcodes.
                      Without this option, flexiplex will search and report possible barcodes.
                      The generated list can be used for known_list in subsequent runs.
-     -i true/false   Replace read ID with barcodes+UMI, remove search strings
-                     including flanking sequenence and split read if multiple
-                     barcodes found (default: true).
+     -l true/false   Replace read ID with barcodes+UMI (default: true)
+     -r true/false   Remove search strings including flanking sequence and split read
+                     if multiple barcodes found (default: true).
      -s true/false   Sort reads into separate files by barcode (default: false)
      -c true/false   Add a _C suffix to the read identifier of any chimeric reads
                      (default: false). For instance if,
@@ -169,8 +170,10 @@ usage: flexiplex [options] [reads_input]
 				-x CTACACGACGCTCTTCCGATCT -b ???????????????? -u ???????????? -x TTTTTTTTT -f 8 -e 2
     -d 10x5v2		10x version 2 chemistry 5', equivalent to:
 				-x CTACACGACGCTCTTCCGATCT -b ???????????????? -u ?????????? -x TTTCTTATATGGG -f 8 -e 2
+    -d 10x_atac		10x ATAC-Seq, equivalent to:
+				-x ACCGAGATCTACAC -b ???????????????? -x CGCGTCTGTCGTCGGCAGCGTCAGATGTGTATAAGAGACAG -f 8 -e 2
     -d grep		Simple grep-like search (edit distance up to 2), equivalent to:
-				-f 2 -k ? -b '' -u '' -i false
+				-f 2 -k ? -b '' -u '' -l false -r false
 
      -h     Print this usage information.
 
@@ -281,6 +284,27 @@ flexiplex -x <left flank> -u "??????????" -x <constant sequence between UMI-baro
 
 Here -u and -b give a pattern of the expected UMI and barcode sequence, in this instance wildcards of length 10bp and 16bp respectively, the exact sequences of the barcodes are provided through -k. -e and -f which are the maximum barcode and flanking sequence edit distances respectively may also need to be adjusted. As a guide we use -e 2 for 16bp barcodes and -f 8 for 32bp (left+right) flanking sequence.
 
+## Demutiplexing multiple barcodes
+
+Some barcoding schemes, such as visiumHD 3', split-seq, pip-seq etc, embed multiple barcodes at either or both ends of a read. These are often (but not always) accompanied by short spacer sequences and a UMI. Barcoding structures like this are best handled with multiple runs of flexiplex - where each run searchers for one the barcodes and adds it to the read id. Since flexiplex can read and write fastqs from standard IO, these mutliple searchs can all be done through pipingon the commanda line. e.g.:
+
+flexiplex [options to find BC1 + UMI] | flexiplex [options to find BC2] | flexiplex [options to find BC3] > final_out.fastq
+The read IDs in the final output will then have the following structure:
+@BC3_#BC2_#BC1_UMI#originalID
+
+To improve the identification of the barcode region, all flexiplex runs prior to the last one should switch read trimming off (-r false)(version 1.02.6+ only).
+
+As a concrete example. Imgaine we have a barcode structure like this:
+[UMI][ACA][BC1][TCTCTC][BC2][GTGTGT][BC3][TTTTTTTTTT], where the UMI and barcodes are all 8bp long. We could demultiple with:
+
+cat raw_reads.fastq |
+flexiplex -u "????????" -x "ACA" -b "????????" -x "TCTCTC????????GTGTGT????????TTTTTTTTTT" -k barcodes.txt -r false |
+flexiplex -x "ACA????????TCTCTC" -b "????????" -x "GTGTGT????????TTTTTTTTTT" -k barcodes.txt -r false |
+flexiplex -x "ACA????????TCTCTC????????GTGTGT" -b "????????" -x "TTTTTTTTTT" -k barcodes.txt -r true 
+> final_out.fastq
+
+The edit distances for the flank sequence (-f) and barcode (-e) may need to be adjusted for the search length and number of barcodes. e.g. -e 1 would be reasonable when the barcodes are 8 bp long and there are ~1000 of them.
+
 ## Simple search
 
 Flexiplex can also be used to perform a simple error tolerant grep-like search of a single sequence, by define the sequence with -x and the required edit distance with -f. Matching reads will be printed to standard out.e.g.
@@ -318,8 +342,8 @@ Flexiplex can be also be used on 10x short read data to search for cells with a 
 
 ``` 
 paste Sample_R1.fastq Sample_R2.fastq | \
-	sed "/^[@,+]/! s/\t/TTTTT/g" | \
-	sed "/^[@,+]/! s/^/CTACACGACGCTCTTCCGATCT/g" | \
+	sed "/^[@+]/! s/\t/TTTTT/g" | \
+	sed "/^[@+]/! s/^/CTACACGACGCTCTTCCGATCT/g" | \
 	flexiplex -x <variant sequence (20-40bp)> -d grep | \
 	flexiplex -d 10x3v3
 ```
@@ -328,7 +352,7 @@ This prefixes the read (before the barcodes) with the 10x primer (CTACACGACGCTCT
 In this example we assume no sequencing errors in the barcodes as the data is Illumina, however a barcode list could also be provided (to the final command) to error correct. The order of demuliplexing and searching can also be switched. e.g.:
 
 ``` 
-paste Sample_R1.fastq Sample_R2.fastq | sed "/[@,+]/! s/^/CTACACGACGCTCTTCCGATCT/g" | flexiplex -d 10x3v3 -k barcodes_list.txt | flexiplex -x <variant sequence> -d grep
+paste Sample_R1.fastq Sample_R2.fastq | sed "/[@+]/! s/^/CTACACGACGCTCTTCCGATCT/g" | flexiplex -d 10x3v3 -k barcodes_list.txt | flexiplex -x <variant sequence> -d grep
 ```
 
 
@@ -338,7 +362,7 @@ paste Sample_R1.fastq Sample_R2.fastq | sed "/[@,+]/! s/^/CTACACGACGCTCTTCCGATCT
 
 Read with a matching barcode will be reported to standard output (or to individual files if the -s true option is provided).
 
-If read chopping and ID replacement is used (-i true, default):
+If read chopping and ID replacement is used (-r true, -l true default):
   - Read IDs will be replaced with the following format (similar to FLAMES): <barcode>_<UMI>#<original ID>_<+/-><N>of<M> where <+/-> indicates whether the barcode was found on the forward or reverse strand of the original read, M is the number of barcodes found in direction indicated by +/- and N is the 1st, 2nd etc. of those barcode.
   - Reads will be reverse complimented if the barcode was found in the reverse direction. For 10x 3' data this puts all reads in the reverse direction of the mRNA (3'->5')
   - If multiple barcodes are found in the same direction the read is split at the position of the second or subsequent primer, and multiple reads reported.
@@ -349,7 +373,7 @@ If barcodes are found in both the forward and reverse directions on a read, the 
 Schematic of default behaviour if multiple barcodes are identified in a read
 
   
- If read chopping and ID replacement is not used (-i false):
+ If read chopping and ID replacement is not used (-r false, -l false):
   - Any read with matching flank and barcode sequence will be reported with read ID appended with _<+/-> as above.
   - Read is reported only once even if multiple flank/barcode sequences found
   - If a flank/barcode is only found in the reverse direction, the read will be reverse complimented.
