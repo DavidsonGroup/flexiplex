@@ -36,11 +36,11 @@ struct PredefinedStruct {
 // predefined settings for known barcode/search schemes
 // new setting added to this map will automatically be available
 static const map< string, PredefinedStruct> predefinedMap = {
-  {"10x3v3", {"10x version 3 chemistry 3'", //option string and description for help information
+  {"10x3v3", {"10x version 3 3' chemistry", //option string and description for help information
 	      "-x CTACACGACGCTCTTCCGATCT -b ???????????????? -u ???????????? -x TTTTTTTTT -f 8 -e 2"}}, //settings
-  {"10x3v2",{"10x version 2 chemistry 3'",
+  {"10x3v2",{"10x version 2 3' chemistry",
 	     "-x CTACACGACGCTCTTCCGATCT -b ???????????????? -u ?????????? -x TTTTTTTTT -f 8 -e 2"}},
-  {"10x5v2",{"10x version 2 chemistry 5'",
+  {"10x5v2",{"10x version 2 5' chemistry",
 	     "-x CTACACGACGCTCTTCCGATCT -b ???????????????? -u ?????????? -x TTTCTTATATGGG -f 8 -e 2"}},
   {"10x_atac",{"10x ATAC-Seq",
 	       "-x ACCGAGATCTACAC -b ???????????????? -x CGCGTCTGTCGTCGGCAGCGTCAGATGTGTATAAGAGACAG -f 8 -e 2"}},
@@ -57,11 +57,11 @@ void print_usage(){
 
   cerr << "  options: \n";
   cerr << "     -k known_list   Either 1) a text file of expected barcodes in the first column,\n";
-  cerr << "                     one row per barcode, or 2) a comma separate string of barcodes.\n";
+  cerr << "                     one row per barcode, or 2) a comma-separated string of barcodes.\n";
   cerr << "                     Without this option, flexiplex will search and report possible barcodes.\n";
   cerr << "                     The generated list can be used for known_list in subsequent runs.\n";
   cerr << "     -l true/false   Replace read ID with barcodes+UMI (default: true)\n"; 
-  cerr << "     -r true/false   Remove search strings including flanking sequenence and split read\n";
+  cerr << "     -r true/false   Remove search strings including flanking sequence and split read\n";
   cerr << "                     if multiple barcodes found (default: true).\n";
   cerr << "     -s true/false   Sort reads into separate files by barcode (default: false)\n";
   cerr << "     -c true/false   Add a _C suffix to the read identifier of any chimeric reads\n";
@@ -74,7 +74,7 @@ void print_usage(){
   cerr << "     -f N            Maximum edit distance to primer+polyT (default 8).\n";
   cerr << "     -p N            Number of threads (default: 1).\n\n";
 
-  cerr << "  Specifying adaptor / barcode structure : \n";
+  cerr << "  Specifying adaptor / barcode structure: \n";
   cerr << "     -x sequence Append flanking sequence to search for\n";
   cerr << "     -b sequence Append the barcode pattern to search for\n";
   cerr << "     -u sequence Append the UMI pattern to search for\n";
