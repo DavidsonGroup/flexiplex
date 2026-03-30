@@ -286,22 +286,21 @@ Here -u and -b give a pattern of the expected UMI and barcode sequence, in this 
 
 ## Demutiplexing multiple barcodes
 
-Some barcoding schemes, such as visiumHD 3', split-seq, pip-seq etc, embed multiple barcodes at either or both ends of a read. These are often (but not always) accompanied by short spacer sequences and a UMI. Barcoding structures like this are best handled with multiple runs of flexiplex - where each run searchers for one the barcodes and adds it to the read id. Since flexiplex can read and write fastqs from standard IO, these mutliple searchs can all be done through pipingon the commanda line. e.g.:
+Some barcoding schemes, such as visiumHD 3', split-seq, pip-seq etc, embed multiple barcodes at either or both ends of a read. These are often (but not always) accompanied by short spacer sequences and a UMI. Barcoding structures like this are best handled with multiple runs of flexiplex - where each run searches for one the barcodes and adds it into the read header. Since flexiplex can read and write fastq format from standard IO, these multiple searches can achieved in a single command line using pipes e.g.:
 
 flexiplex [options to find BC1 + UMI] | flexiplex [options to find BC2] | flexiplex [options to find BC3] > final_out.fastq
 The read IDs in the final output will then have the following structure:
 @BC3_#BC2_#BC1_UMI#originalID
 
-To improve the identification of the barcode region, all flexiplex runs prior to the last one should switch read trimming off (-r false)(version 1.02.6+ only).
+To improve the identification of the barcode region, all flexiplex runs prior to the last one should switch read trimming off (-r false)(version 1.02.6+ only). The order the barcodes are searched does not matter, aside from it impacting the order they are reported in the read header.
 
 As a concrete example. Imgaine we have a barcode structure like this:
-[UMI][ACA][BC1][TCTCTC][BC2][GTGTGT][BC3][TTTTTTTTTT], where the UMI and barcodes are all 8bp long. We could demultiple with:
+[UMI][ACA][BC1][TCTCTC][BC2][GTGTGT][BC3][TTTTTTTTTT][cDNA], where the UMI and barcodes are all 8bp long. We could demultiplex with:
 
 cat raw_reads.fastq |
 flexiplex -u "????????" -x "ACA" -b "????????" -x "TCTCTC????????GTGTGT????????TTTTTTTTTT" -k barcodes.txt -r false |
 flexiplex -x "ACA????????TCTCTC" -b "????????" -x "GTGTGT????????TTTTTTTTTT" -k barcodes.txt -r false |
-flexiplex -x "ACA????????TCTCTC????????GTGTGT" -b "????????" -x "TTTTTTTTTT" -k barcodes.txt -r true 
-> final_out.fastq
+flexiplex -x "ACA????????TCTCTC????????GTGTGT" -b "????????" -x "TTTTTTTTTT" -k barcodes.txt -r true > final_out.fastq
 
 The edit distances for the flank sequence (-f) and barcode (-e) may need to be adjusted for the search length and number of barcodes. e.g. -e 1 would be reasonable when the barcodes are 8 bp long and there are ~1000 of them.
 
