@@ -25,7 +25,7 @@ using namespace std;
 
 // Append .1 to version for dev code, remove for release
 // e.g. 1.00.1 (dev) goes to 1.01 (release)
-const static string VERSION="1.02.6";
+const static string VERSION="1.02.6.1";
 
 struct PredefinedStruct {
   string description;
@@ -63,6 +63,7 @@ void print_usage(){
   cerr << "     -l true/false   Replace read ID with barcodes+UMI (default: true)\n"; 
   cerr << "     -r true/false   Remove search strings including flanking sequence and split read\n";
   cerr << "                     if multiple barcodes found (default: true).\n";
+  cerr << "     -a true/false   Output all reads including those without a barcode match (default: false)\n";
   cerr << "     -s true/false   Sort reads into separate files by barcode (default: false)\n";
   cerr << "     -c true/false   Add a _C suffix to the read identifier of any chimeric reads\n";
   cerr << "                     (default: false). For instance if,\n";
@@ -513,10 +514,15 @@ void print_read(string read_id, string read, string qual,
 		bool split, unordered_set<string> & found_barcodes,
 		bool change_id,
 		bool trim_barcodes,
-    bool chimeric, bool is_fastq){
+		bool chimeric, bool is_fastq, bool print_all_reads){
 
     auto vec_size = vec_bc.size();
 
+    if(print_all_reads && vec_size==0){
+      vec_bc.push_back({"-","-",-1,-1,0,0,false});
+      vec_size=1;
+    }
+    
     //loop over the barcodes found... usually will just be one
     for (int b = 0; b < vec_size; b++) {
 
@@ -654,7 +660,8 @@ int main(int argc, char **argv) {
   bool add_barcode_to_id = true;      //(l)
   bool remove_barcodes = true;        //(r)
   bool print_chimeric = false;        //(c)
-
+  bool print_all_reads = false;       //(a)
+  
   std::vector<std::pair<std::string, std::string>> search_pattern;
 
   // Set of known barcodes
@@ -673,7 +680,7 @@ int main(int argc, char **argv) {
   vector<char *> myArgs(argv, argv + argc);
 
   while ((c = getopt(myArgs.size(), myArgs.data(),
-                     "d:k:l:r:b:u:x:e:f:n:s:hp:c:")) != EOF) {
+                     "d:k:l:r:b:u:x:e:f:n:s:hp:c:a:")) != EOF) {
     switch (c) {
     case 'd': { // d=predefined list of settings for various search/barcode
                 // schemes
@@ -730,6 +737,12 @@ int main(int argc, char **argv) {
     case 'l': {
       add_barcode_to_id = get_bool_opt_arg(optarg);
       cerr << "Setting read IDs to be updated with barcode: " << add_barcode_to_id << "\n";
+      params += 2;
+      break;
+    }
+    case 'a': {
+      print_all_reads = get_bool_opt_arg(optarg);
+      cerr << "Setting output all reads regardless of match to: " << print_all_reads << "\n";
       params += 2;
       break;
     }
@@ -950,7 +963,7 @@ int main(int argc, char **argv) {
   print_result:
     // START print_result LABEL...
 
-    // loop over the threads and print out ther results
+    // loop over the threads and print out the results
     for (int t = 0; t < sr_v.size(); t++) {
       if (sr_v[t].size() > 0)
         threads[t].join(); // wait for the threads to finish before printing
@@ -986,7 +999,8 @@ int main(int argc, char **argv) {
 	    add_barcode_to_id,
             remove_barcodes,
             print_chimeric && sr_v[t][r].chimeric, // include chimeric information if requested
-            is_fastq
+            is_fastq,
+	    print_all_reads
           );
 
           // case we just want to print read once if multiple bc found.
@@ -1005,7 +1019,8 @@ int main(int argc, char **argv) {
 	      add_barcode_to_id,
               remove_barcodes,
               print_chimeric && sr_v[t][r].chimeric, // include chimeric information if requested
-              is_fastq
+              is_fastq,
+	      print_all_reads
             );
           }
         }
