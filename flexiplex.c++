@@ -63,7 +63,13 @@ void print_usage(){
   cerr << "     -l true/false   Replace read ID with barcodes+UMI (default: true)\n"; 
   cerr << "     -r true/false   Remove search strings including flanking sequence and split read\n";
   cerr << "                     if multiple barcodes found (default: true).\n";
-  cerr << "     -a true/false   Output all reads including those without a barcode match (default: false)\n";
+  cerr << "     -a true/false   Output all reads, including those without a barcode match\n";
+  cerr << "                     (default: false). The read comment gains the uncorrected\n";
+  cerr << "                     barcode and UMI as observed in the read:\n";
+  cerr << "                       CB:Z:<barcode>\tCR:Z:<raw barcode>\tUB:Z:<umi>\tUR:Z:<raw umi>\n";
+  cerr << "                     CB and UB are '-' when no known barcode matched, as is CR\n";
+  cerr << "                     when no flanking sequence was found. Reads are not listed in\n";
+  cerr << "                     the reads_barcodes.txt table unless a barcode was assigned.\n";
   cerr << "     -s true/false   Sort reads into separate files by barcode (default: false)\n";
   cerr << "     -c true/false   Add a _C suffix to the read identifier of any chimeric reads\n";
   cerr << "                     (default: false). For instance if,\n";
@@ -127,12 +133,27 @@ void reverse_complement(string & seq){
 struct Barcode {
   string barcode;
   string umi;
+  string raw_barcode; // barcode as observed in the read, before correction
+  string raw_umi;     // UMI at the position implied by the search pattern
   int editd;
   int flank_editd;
   int flank_start;
   int flank_end;
   bool unambiguous;
 } ;
+
+// A Barcode with a negative edit distance is a placeholder for a read which
+// could not be assigned to any barcode in the known list. These are only ever
+// created when all reads are being reported (-a).
+inline bool is_unassigned(const Barcode & bc){ return bc.editd < 0; }
+
+// number of entries which were assigned a barcode from the known list
+inline int count_assigned(const vector<Barcode> & vec_bc){
+  int n = 0;
+  for(int b = 0; b < vec_bc.size(); b++)
+    if(!is_unassigned(vec_bc.at(b))) n++;
+  return n;
+}
 
 struct SearchResult {
   string read_id;
@@ -288,6 +309,7 @@ Barcode get_barcode(string & seq,
   //initialise struct variables for return:
   Barcode barcode;
   barcode.editd=100; barcode.flank_editd=100; barcode.unambiguous = false;
+  barcode.flank_start=-1; barcode.flank_end=-1; //no flank located (yet)
 
   //initialise edlib configuration
   // Use IUPAC codes
@@ -400,11 +422,18 @@ Barcode get_barcode(string & seq,
   std::string exact_bc = seq.substr(
       read_to_subpatterns[bc_index],
       search_pattern[bc_index].second.length());
+
+  //keep the barcode and UMI as observed, at the positions the search pattern
+  //implies. These are recorded before the known list is consulted so that they
+  //are available whether or not a known barcode is matched below.
+  barcode.raw_barcode = exact_bc;
+  barcode.raw_umi = get_umi(seq, search_pattern, read_to_subpatterns, umi_index, bc_index, false, 0, 0);
+
   if (known_barcodes->size()==0 || (known_barcodes->find(exact_bc) != known_barcodes->end())){
     barcode.barcode=exact_bc;
     barcode.editd=0;
     barcode.unambiguous=true;
-    barcode.umi = get_umi(seq, search_pattern, read_to_subpatterns, umi_index, bc_index, false, 0, 0);
+    barcode.umi = barcode.raw_umi;
     return(barcode);
   }
 
@@ -445,7 +474,9 @@ Barcode get_barcode(string & seq,
 }
 
 //search a read for one or more barcodes (parent function that calls get_barcode)
-vector<Barcode> big_barcode_search(string & sequence, unordered_set<string> & known_barcodes, int max_flank_editd, int max_editd, const std::vector<std::pair<std::string, std::string>> &search_pattern) {
+//keep_unassigned reports a read whose flanking sequence was found but which
+//matched no known barcode, rather than discarding it (see the -a option).
+vector<Barcode> big_barcode_search(string & sequence, unordered_set<string> & known_barcodes, int max_flank_editd, int max_editd, const std::vector<std::pair<std::string, std::string>> &search_pattern, bool keep_unassigned=false) {
 
   vector<Barcode> return_vec; //vector of all the barcodes found
 
@@ -464,6 +495,17 @@ vector<Barcode> big_barcode_search(string & sequence, unordered_set<string> & kn
     vector<Barcode> masked_res;
     masked_res=big_barcode_search(masked_sequence,known_barcodes,max_flank_editd,max_editd, search_pattern); //,ss);
     return_vec.insert(return_vec.end(),masked_res.begin(),masked_res.end()); //add to result
+  } else if(keep_unassigned && result.flank_start>=0 && result.flank_editd<=max_flank_editd){
+    //the flanking sequence was found but no known barcode matched it. Report the
+    //read as unassigned, keeping the observed barcode and UMI along with the
+    //flank coordinates, so that trimming behaves as it does for a match.
+    //Note this branch does not recurse, so a read is never reported unassigned
+    //more than once.
+    result.barcode="-";
+    result.umi=result.raw_umi;
+    result.editd=-1;
+    result.unambiguous=false;
+    return_vec.push_back(result);
   }
   return(return_vec);
 
@@ -486,6 +528,7 @@ bool get_bool_opt_arg(string value){
 // print information about barcodes
 void print_stats(string read_id, vector<Barcode> & vec_bc, ostream & out_stream){
   for(int b=0; b<vec_bc.size() ; b++){
+    if(is_unassigned(vec_bc.at(b))) continue; //nothing to report for these
     out_stream << read_id << "\t"
 	       << vec_bc.at(b).barcode << "\t"
 	       << vec_bc.at(b).flank_editd << "\t"
@@ -509,17 +552,29 @@ void print_line(string id, string read, string quals, bool is_fastq, ostream & o
 }
 
 //print fastq or fasta lines..
+//print_all_reads adds the uncorrected barcode/UMI to the read comment as CR/UR.
+//emit_unassigned reports a read for which no flanking sequence was found at all;
+//it must only be set for one of the two strands so the read isn't printed twice.
 void print_read(string read_id, string read, string qual,
 		vector<Barcode> & vec_bc, string prefix,
 		bool split, unordered_set<string> & found_barcodes,
 		bool change_id,
 		bool trim_barcodes,
-		bool chimeric, bool is_fastq, bool print_all_reads){
+		bool chimeric, bool is_fastq, bool print_all_reads,
+		bool emit_unassigned){
 
     auto vec_size = vec_bc.size();
 
-    if(print_all_reads && vec_size==0){
-      vec_bc.push_back({"-","-",-1,-1,0,0,false});
+    if(emit_unassigned && vec_size==0){
+      //No flanking sequence was found, so there is nothing to trim and no
+      //observed barcode to report. Flank coordinates of -1 leave the read whole.
+      Barcode unassigned;
+      unassigned.barcode="-"; unassigned.umi="-";
+      unassigned.raw_barcode="-"; unassigned.raw_umi="-";
+      unassigned.editd=-1; unassigned.flank_editd=-1;
+      unassigned.flank_start=-1; unassigned.flank_end=-1;
+      unassigned.unambiguous=false;
+      vec_bc.push_back(unassigned);
       vec_size=1;
     }
     
@@ -535,8 +590,13 @@ void print_read(string read_id, string read, string qual,
 
       string barcode = vec_bc.at(b).barcode;
       // also add the proper FASTQ way: \tCB:Z:barcode\tUB:Z:umi
+      // when reporting all reads, the uncorrected barcode and UMI follow as CR/UR
+      string tags = "\tCB:Z:" + barcode + "\tUB:Z:" + vec_bc[b].umi;
+      if(print_all_reads)
+        tags = "\tCB:Z:" + barcode + "\tCR:Z:" + vec_bc[b].raw_barcode +
+               "\tUB:Z:" + vec_bc[b].umi + "\tUR:Z:" + vec_bc[b].raw_umi;
       string new_read_id =
-          barcode + "_" + vec_bc.at(b).umi + "#" + read_id + ss.str() + "\tCB:Z:" + barcode + "\tUB:Z:" + vec_bc[b].umi;
+          barcode + "_" + vec_bc.at(b).umi + "#" + read_id + ss.str() + tags;
 
       // work out the start and end base in case multiple barcodes
       // note: read_start+1, see issue #63
@@ -597,7 +657,8 @@ void print_read(string read_id, string read, string qual,
 // separated out from main so that this can be run with threads
 void search_read(vector<SearchResult> & reads, unordered_set<string> & known_barcodes,
   int flank_edit_distance, int edit_distance,
-  const std::vector<std::pair<std::string, std::string>> &search_pattern) {
+  const std::vector<std::pair<std::string, std::string>> &search_pattern,
+  bool keep_unassigned) {
 
   for (int r=0; r<reads.size(); r++){
     //forward search
@@ -606,7 +667,8 @@ void search_read(vector<SearchResult> & reads, unordered_set<string> & known_bar
       known_barcodes,
       flank_edit_distance,
       edit_distance,
-      search_pattern
+      search_pattern,
+      keep_unassigned
     );
 
     // get reverse complement
@@ -619,17 +681,39 @@ void search_read(vector<SearchResult> & reads, unordered_set<string> & known_bar
 	known_barcodes,
 	flank_edit_distance,
 	edit_distance,
-        search_pattern
+        search_pattern,
+	keep_unassigned
     );
 
     reads[r].vec_bc_for = forward_reads;
     reads[r].vec_bc_rev = reverse_reads;
 
-    reads[r].count = forward_reads.size() + reverse_reads.size();
+    int n_for = count_assigned(reads[r].vec_bc_for);
+    int n_rev = count_assigned(reads[r].vec_bc_rev);
+
+    // An unassigned read must only be reported once. Drop the placeholder when
+    // the opposite strand carries a real barcode, or when the flanking sequence
+    // was found on both strands, in which case the better match is kept.
+    if(keep_unassigned){
+      bool for_unassigned = reads[r].vec_bc_for.size()==1 && is_unassigned(reads[r].vec_bc_for.at(0));
+      bool rev_unassigned = reads[r].vec_bc_rev.size()==1 && is_unassigned(reads[r].vec_bc_rev.at(0));
+      if(for_unassigned && rev_unassigned){
+	if(reads[r].vec_bc_for.at(0).flank_editd <= reads[r].vec_bc_rev.at(0).flank_editd)
+	  reads[r].vec_bc_rev.clear();
+	else
+	  reads[r].vec_bc_for.clear();
+      } else if(for_unassigned && n_rev>0){
+	reads[r].vec_bc_for.clear();
+      } else if(rev_unassigned && n_for>0){
+	reads[r].vec_bc_rev.clear();
+      }
+    }
+
+    reads[r].count = n_for + n_rev;
 
     // a chimeric read occurs when there are barcodes detected in both the forward
     // and reverse strands.
-    reads[r].chimeric = forward_reads.size() && reverse_reads.size();
+    reads[r].chimeric = n_for && n_rev;
   }
 }
 
@@ -946,7 +1030,8 @@ int main(int argc, char **argv) {
           sr_v[t].resize(b + 1);
           threads[t] = std::thread(search_read, ref(sr_v[t]),
                                    ref(known_barcodes), flank_edit_distance,
-                                   edit_distance, ref(search_pattern));
+                                   edit_distance, ref(search_pattern),
+                                   print_all_reads);
           for (int t2 = t + 1; t2 < n_threads; t2++) {
             sr_v[t2].resize(0);
           }
@@ -957,7 +1042,8 @@ int main(int argc, char **argv) {
       // send reads to the thread
       threads[t] =
           std::thread(search_read, ref(sr_v[t]), ref(known_barcodes),
-                      flank_edit_distance, edit_distance, ref(search_pattern));
+                      flank_edit_distance, edit_distance, ref(search_pattern),
+                      print_all_reads);
     }
 
   print_result:
@@ -971,9 +1057,11 @@ int main(int argc, char **argv) {
       for (int r = 0; r < sr_v[t].size(); r++) { // loop over the reads
 
         for (int b = 0; b < sr_v[t][r].vec_bc_for.size(); b++)
-          barcode_counts[sr_v[t][r].vec_bc_for.at(b).barcode]++;
+          if (!is_unassigned(sr_v[t][r].vec_bc_for.at(b)))
+            barcode_counts[sr_v[t][r].vec_bc_for.at(b).barcode]++;
         for (int b = 0; b < sr_v[t][r].vec_bc_rev.size(); b++)
-          barcode_counts[sr_v[t][r].vec_bc_rev.at(b).barcode]++;
+          if (!is_unassigned(sr_v[t][r].vec_bc_rev.at(b)))
+            barcode_counts[sr_v[t][r].vec_bc_rev.at(b).barcode]++;
 
         if (sr_v[t][r].count > 0)
           bc_count++;
@@ -988,6 +1076,12 @@ int main(int argc, char **argv) {
           print_stats(sr_v[t][r].read_id, sr_v[t][r].vec_bc_for, out_stat_file);
           print_stats(sr_v[t][r].read_id, sr_v[t][r].vec_bc_rev, out_stat_file);
 
+          // No flanking sequence was found on either strand, so nothing was
+          // located to report. Let the forward call, and only the forward call,
+          // emit the read as unassigned so it isn't printed twice.
+          bool no_flank_found = sr_v[t][r].vec_bc_for.size() == 0 &&
+                                sr_v[t][r].vec_bc_rev.size() == 0;
+
           print_read(
             sr_v[t][r].read_id + "_+",
             sr_v[t][r].line,
@@ -1000,7 +1094,8 @@ int main(int argc, char **argv) {
             remove_barcodes,
             print_chimeric && sr_v[t][r].chimeric, // include chimeric information if requested
             is_fastq,
-	    print_all_reads
+	    print_all_reads,
+	    print_all_reads && no_flank_found
           );
 
           // case we just want to print read once if multiple bc found.
@@ -1020,7 +1115,8 @@ int main(int argc, char **argv) {
               remove_barcodes,
               print_chimeric && sr_v[t][r].chimeric, // include chimeric information if requested
               is_fastq,
-	      print_all_reads
+	      print_all_reads,
+	      false // already handled by the forward strand above
             );
           }
         }
