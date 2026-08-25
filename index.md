@@ -124,19 +124,26 @@ To see usage information, run
 # Usage
 
 ```
-FLEXIPLEX 1.02.6
+FLEXIPLEX 1.02.7
 usage: flexiplex [options] [reads_input]
 
   reads_input: a .fastq or .fasta file. Will read from stdin if empty.
 
   options:
      -k known_list   Either 1) a text file of expected barcodes in the first column,
-                     one row per barcode, or 2) a comma separate string of barcodes.
+                     one row per barcode, or 2) a comma-separated string of barcodes.
                      Without this option, flexiplex will search and report possible barcodes.
                      The generated list can be used for known_list in subsequent runs.
      -l true/false   Replace read ID with barcodes+UMI (default: true)
      -r true/false   Remove search strings including flanking sequence and split read
                      if multiple barcodes found (default: true).
+     -a true/false   Output all reads, including those without a barcode match
+                     (default: false). The read comment gains the uncorrected
+                     barcode and UMI as observed in the read:
+                       CB:Z:<barcode>	CR:Z:<raw barcode>	UB:Z:<umi>	UR:Z:<raw umi>
+                     CB and UB are '-' when no known barcode matched, as is CR
+                     when no flanking sequence was found. Reads are not listed in
+                     the reads_barcodes.txt table unless a barcode was assigned.
      -s true/false   Sort reads into separate files by barcode (default: false)
      -c true/false   Add a _C suffix to the read identifier of any chimeric reads
                      (default: false). For instance if,
@@ -148,7 +155,7 @@ usage: flexiplex [options] [reads_input]
      -f N            Maximum edit distance to primer+polyT (default 8).
      -p N            Number of threads (default: 1).
 
-  Specifying adaptor / barcode structure :
+  Specifying adaptor / barcode structure:
      -x sequence Append flanking sequence to search for
      -b sequence Append the barcode pattern to search for
      -u sequence Append the UMI pattern to search for
@@ -164,11 +171,11 @@ usage: flexiplex [options] [reads_input]
          -x CTACACGACGCTCTTCCGATCT -b ???????????????? -u ???????????? -x TTTTTTTTT
 
   Predefined search schemes:
-    -d 10x3v2		10x version 2 chemistry 3', equivalent to:
+    -d 10x3v2		10x version 2 3' chemistry, equivalent to:
 				-x CTACACGACGCTCTTCCGATCT -b ???????????????? -u ?????????? -x TTTTTTTTT -f 8 -e 2
-    -d 10x3v3		10x version 3 chemistry 3', equivalent to:
+    -d 10x3v3		10x version 3 3' chemistry, equivalent to:
 				-x CTACACGACGCTCTTCCGATCT -b ???????????????? -u ???????????? -x TTTTTTTTT -f 8 -e 2
-    -d 10x5v2		10x version 2 chemistry 5', equivalent to:
+    -d 10x5v2		10x version 2 5' chemistry, equivalent to:
 				-x CTACACGACGCTCTTCCGATCT -b ???????????????? -u ?????????? -x TTTCTTATATGGG -f 8 -e 2
     -d 10x_atac		10x ATAC-Seq, equivalent to:
 				-x ACCGAGATCTACAC -b ???????????????? -x CGCGTCTGTCGTCGGCAGCGTCAGATGTGTATAAGAGACAG -f 8 -e 2
